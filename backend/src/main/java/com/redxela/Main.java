@@ -81,7 +81,8 @@ import com.redxela.service.MotorPlanificador;
 import com.redxela.service.PoliticaPlanificacion;
 import com.redxela.service.ServicioInventario;
 import com.redxela.service.ServicioRecepcion;
-import com.redxela.util.ConsolaFormato;
+import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
+import com.redxela.concurrencia.deadlock.InformacionConflicto;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -330,6 +331,33 @@ public class Main {
         } else {
             formato.imprimirInfo("Fallo: Se detecto fuga de recursos en los semaforos");
         }
+
+        // =========================================================================
+        // ETAPA 5: DEMOSTRACION DE DEADLOCK Y RESOLUCION MANUAL
+        // =========================================================================
+        formato.imprimirSeparador();
+        formato.imprimirInfo("ETAPA 5: Demostracion de deadlock y resolucion manual");
+
+        // crear dos pedidos simples para provocar deadlock
+        Pedido pedidoDlA = new Pedido("DL-1", cliente1, NivelServicio.PRIORITARIO);
+        Pedido pedidoDlB = new Pedido("DL-2", cliente2, NivelServicio.PRIORITARIO);
+
+        // iniciar simulador de deadlock con el gestor de recursos existente
+        SimuladorDeadlock simuladorDl = new SimuladorDeadlock(gestorRecursos);
+        InformacionConflicto conflictoDl = simuladorDl.forzarDeadlockDeliberado(pedidoDlA, TipoRecurso.MONTACARGAS, TipoRecurso.ESTACION_EMPAQUE, pedidoDlB);
+        if (conflictoDl != null) {
+            System.out.println("[DEADLOCK] " + conflictoDl);
+            // resolver manteniendo el pedido A como ganador
+            simuladorDl.resolverConflictoManual(pedidoDlA.getId());
+            // reencolar el pedido perdedor si existe
+            Pedido perdedor = simuladorDl.getPedidoPerdedor();
+            if (perdedor != null) {
+                colaPedidos.encolarPedido(perdedor);
+            }
+        }
+
+        // imprimir estado de recursos luego de la resolucion
+        gestorRecursos.imprimirEstadoRecursos();
 
         formato.imprimirEncabezado("FIN DE LA EJECUCION DEL MODULO 2");
     }
