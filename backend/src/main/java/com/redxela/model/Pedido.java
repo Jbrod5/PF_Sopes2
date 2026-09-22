@@ -1,7 +1,12 @@
 package com.redxela.model;
 
+// import java.util.ArrayList;
+// import java.util.List;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+
 
 // entidad principal que representa un pedido de cliente en el centro de distribucion
 public class Pedido {
@@ -144,6 +149,9 @@ public class Pedido {
                 }
             }
         }
+        // return recursosConsolidados;
+        // ordenar recursos segun su posicion fija en el enum para prevenir espera circular
+        Collections.sort(recursosConsolidados);
         return recursosConsolidados;
     }
 
