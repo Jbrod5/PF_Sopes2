@@ -359,6 +359,11 @@ public class Main {
         // imprimir estado de recursos luego de la resolucion
         gestorRecursos.imprimirEstadoRecursos();
 
+        // iniciar servidor javalin en el puerto 7070 para la conexion con el frontend
+        AlmacenPaginado almacenServidor = new AlmacenPaginado(4, 3, 6);
+        com.redxela.controller.ControladorServidor servidor = new com.redxela.controller.ControladorServidor(colaPedidos, gestorRecursos, almacenServidor);
+        System.out.println("Servidor Javalin iniciado en el puerto 7070");
+
         formato.imprimirEncabezado("FIN DE LA EJECUCION DEL MODULO 2");
     }
 }
