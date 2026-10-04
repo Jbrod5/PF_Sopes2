@@ -2,6 +2,7 @@ package com.redxela.controller;
 
 import io.javalin.Javalin;
 import io.javalin.http.Context;
+import io.javalin.http.staticfiles.Location;
 
 import com.redxela.service.ColaPrioridadPedidos;
 import com.redxela.service.PoliticaPlanificacion;
@@ -61,6 +62,11 @@ public class ControladorServidor {
                 // reenviar evento a todos los clientes conectados
             });
         });
+
+        // configurar servicio de archivos estaticos del frontend compilado
+        this.app.addStaticFiles("/home/jorge/Sopes2/PF/PF_Sopes2/frontend/dist", Location.EXTERNAL);
+        // configurar ruta raiz para entregar index.html compilado
+        this.app.addSinglePageRoot("/", "/home/jorge/Sopes2/PF/PF_Sopes2/frontend/dist/index.html", Location.EXTERNAL);
 
         // linea en blanco antes de cierre de bloque
     }
