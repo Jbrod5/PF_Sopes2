@@ -123,6 +123,11 @@ public class ProcesoPedidoInterbloqueable implements Runnable {
             boolean obtenido2 = this.gestorRecursos.adquirirRecurso(this.recursoSegundo);
             if (!obtenido2 || this.desapropiado) {
                 System.out.println("[INTERRUPCION] Pedido " + this.pedido.getId() + " fue desapropiado mientras esperaba");
+                // liberar el recurso inicial retenido antes de retornar
+                if (this.recursoInicialAdquirido) {
+                    this.gestorRecursos.liberarRecurso(this.recursoInicial);
+                    this.recursoInicialAdquirido = false;
+                }
                 return;
             }
 

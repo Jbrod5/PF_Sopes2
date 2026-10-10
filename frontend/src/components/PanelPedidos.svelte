@@ -1,10 +1,14 @@
 <script>
-  import { registrarPedido, cambiarPolitica } from "../services/servicioApi";
+  import { registrarPedido, cambiarPolitica } from "../services/servicioApi.js";
   let nombre = "";
   let nivel = "ESTANDAR";
+  let contador = 1;
 
   async function enviar() {
-    await registrarPedido({ nombre, nivel });
+    const id = "WEB-" + contador;
+    contador = contador + 1;
+    await registrarPedido({ id, cliente: nombre, nivel });
+    nombre = "";
   }
 
   async function actualizarPolitica() {
