@@ -81,9 +81,9 @@ import com.redxela.service.MotorPlanificador;
 import com.redxela.service.PoliticaPlanificacion;
 import com.redxela.service.ServicioInventario;
 import com.redxela.service.ServicioRecepcion;
+import com.redxela.util.ConsolaFormato;
 import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
 import com.redxela.concurrencia.deadlock.InformacionConflicto;
-import com.redxela.util.ConsolaFormato;
 
 import java.util.ArrayList;
 import java.util.List;
