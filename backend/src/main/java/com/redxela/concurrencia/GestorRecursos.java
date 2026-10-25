@@ -3,9 +3,13 @@ package com.redxela.concurrencia;
 import com.redxela.config.ConstantesSimulacion;
 import com.redxela.model.TipoRecurso;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 // gestor centralizado de recursos compartidos mediante semaforos de conteo
 public class GestorRecursos {
@@ -27,6 +31,12 @@ public class GestorRecursos {
 
     // semaforo binario para el sistema de escaneo compartido
     private final Semaphore semaforoSistemaEscaneo;
+
+    // mapa de recursos retenidos por cada tenedor identificado
+    private final Map<String, List<TipoRecurso>> recursosPorTenedor = new HashMap<String, List<TipoRecurso>>();
+
+    // cerrojo para proteger el registro de tenedores
+    private final ReentrantLock cerrojoRegistro = new ReentrantLock(true);
 
     // capacidades totales registradas para cada recurso
     private final int totalEstacionesEmpaque;
@@ -248,6 +258,122 @@ public class GestorRecursos {
         for (int i = listaRecursos.size() - 1; i >= 0; i--) {
             TipoRecurso recurso = listaRecursos.get(i);
             this.liberarRecurso(recurso, 1);
+        }
+    }
+
+    /**
+     * Adquirir una unidad del recurso registrando el identificador del tenedor.
+     *
+     * @param tipo tipo de recurso a solicitar.
+     * @param idTenedor identificador de quien retiene el recurso.
+     * @return verdadero si se obtuvo el recurso.
+     */
+    public boolean adquirirRecursoPara(TipoRecurso tipo, String idTenedor) {
+        return this.adquirirRecursoPara(tipo, 1, idTenedor);
+    }
+
+    /**
+     * Adquirir varias unidades del recurso registrando el identificador del tenedor.
+     *
+     * @param tipo tipo de recurso a solicitar.
+     * @param cantidad numero de unidades solicitadas.
+     * @param idTenedor identificador de quien retiene el recurso.
+     * @return verdadero si se obtuvo el recurso.
+     */
+    public boolean adquirirRecursoPara(TipoRecurso tipo, int cantidad, String idTenedor) {
+        boolean obtenido = this.adquirirRecurso(tipo, cantidad);
+        if (obtenido) {
+            this.anotarTenedor(tipo, cantidad, idTenedor);
+        }
+        return obtenido;
+    }
+
+    /**
+     * Liberar una unidad del recurso y remover al tenedor del registro.
+     *
+     * @param tipo tipo de recurso a devolver.
+     * @param idTenedor identificador de quien devuelve el recurso.
+     */
+    public void liberarRecursoDe(TipoRecurso tipo, String idTenedor) {
+        this.liberarRecursoDe(tipo, 1, idTenedor);
+    }
+
+    /**
+     * Liberar varias unidades del recurso y remover al tenedor del registro.
+     *
+     * @param tipo tipo de recurso a devolver.
+     * @param cantidad numero de unidades a restituir.
+     * @param idTenedor identificador de quien devuelve el recurso.
+     */
+    public void liberarRecursoDe(TipoRecurso tipo, int cantidad, String idTenedor) {
+        this.liberarRecurso(tipo, cantidad);
+        this.removerTenedor(tipo, cantidad, idTenedor);
+    }
+
+    /**
+     * Consultar los identificadores que retienen unidades de un recurso.
+     *
+     * @param tipo tipo de recurso a consultar.
+     * @return lista de identificadores de tenedores.
+     */
+    public List<String> obtenerTenedores(TipoRecurso tipo) {
+        this.cerrojoRegistro.lock();
+        try {
+            List<String> tenedores = new ArrayList<String>();
+            for (String clave : this.recursosPorTenedor.keySet()) {
+                List<TipoRecurso> retenidos = this.recursosPorTenedor.get(clave);
+                for (int i = 0; i < retenidos.size(); i++) {
+                    if (retenidos.get(i) == tipo) {
+                        tenedores.add(clave);
+                        break;
+                    }
+                }
+            }
+            return tenedores;
+        } finally {
+            this.cerrojoRegistro.unlock();
+        }
+    }
+
+    // anotar unidades retenidas a nombre del tenedor indicado
+    private void anotarTenedor(TipoRecurso tipo, int cantidad, String idTenedor) {
+        if (idTenedor == null) {
+            return;
+        }
+        this.cerrojoRegistro.lock();
+        try {
+            List<TipoRecurso> lista = this.recursosPorTenedor.get(idTenedor);
+            if (lista == null) {
+                lista = new ArrayList<TipoRecurso>();
+                this.recursosPorTenedor.put(idTenedor, lista);
+            }
+            for (int i = 0; i < cantidad; i++) {
+                lista.add(tipo);
+            }
+        } finally {
+            this.cerrojoRegistro.unlock();
+        }
+    }
+
+    // remover unidades restituidas del registro del tenedor indicado
+    private void removerTenedor(TipoRecurso tipo, int cantidad, String idTenedor) {
+        if (idTenedor == null) {
+            return;
+        }
+        this.cerrojoRegistro.lock();
+        try {
+            List<TipoRecurso> lista = this.recursosPorTenedor.get(idTenedor);
+            if (lista == null) {
+                return;
+            }
+            for (int i = 0; i < cantidad; i++) {
+                lista.remove(tipo);
+            }
+            if (lista.isEmpty()) {
+                this.recursosPorTenedor.remove(idTenedor);
+            }
+        } finally {
+            this.cerrojoRegistro.unlock();
         }
     }
 

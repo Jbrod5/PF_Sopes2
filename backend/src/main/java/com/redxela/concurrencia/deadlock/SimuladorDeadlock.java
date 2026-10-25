@@ -35,6 +35,9 @@ public class SimuladorDeadlock {
     private TipoRecurso recursoSaturadoB;
     private Pedido pedidoPerdedor;
 
+    // identificador de tenedor para los permisos retenidos por el simulador
+    private static final String TENEDOR_SIMULADOR = "simulador-deadlock";
+
     /**
      * Constructor sobrecargado con gestor de recursos.
      *
@@ -79,7 +82,7 @@ public class SimuladorDeadlock {
         int disponiblesA = this.gestorRecursos.consultarDisponibles(recursoA);
         if (disponiblesA > 1) {
             this.excedenteRetenidoA = disponiblesA - 1;
-            this.gestorRecursos.adquirirRecurso(recursoA, this.excedenteRetenidoA);
+            this.gestorRecursos.adquirirRecursoPara(recursoA, this.excedenteRetenidoA, TENEDOR_SIMULADOR);
         } else {
             this.excedenteRetenidoA = 0;
         }
@@ -87,7 +90,7 @@ public class SimuladorDeadlock {
         int disponiblesB = this.gestorRecursos.consultarDisponibles(recursoB);
         if (disponiblesB > 1) {
             this.excedenteRetenidoB = disponiblesB - 1;
-            this.gestorRecursos.adquirirRecurso(recursoB, this.excedenteRetenidoB);
+            this.gestorRecursos.adquirirRecursoPara(recursoB, this.excedenteRetenidoB, TENEDOR_SIMULADOR);
         } else {
             this.excedenteRetenidoB = 0;
         }
@@ -190,11 +193,11 @@ public class SimuladorDeadlock {
 
         // liberar los permisos excedentes retenidos al inicio para restaurar la capacidad normal
         if (this.excedenteRetenidoA > 0 && this.recursoSaturadoA != null) {
-            this.gestorRecursos.liberarRecurso(this.recursoSaturadoA, this.excedenteRetenidoA);
+            this.gestorRecursos.liberarRecursoDe(this.recursoSaturadoA, this.excedenteRetenidoA, TENEDOR_SIMULADOR);
             this.excedenteRetenidoA = 0;
         }
         if (this.excedenteRetenidoB > 0 && this.recursoSaturadoB != null) {
-            this.gestorRecursos.liberarRecurso(this.recursoSaturadoB, this.excedenteRetenidoB);
+            this.gestorRecursos.liberarRecursoDe(this.recursoSaturadoB, this.excedenteRetenidoB, TENEDOR_SIMULADOR);
             this.excedenteRetenidoB = 0;
         }
 

@@ -67,7 +67,7 @@ public class ProcesoSimulacionPedido implements Runnable {
             for (int i = 0; i < requeridos.size(); i++) {
                 TipoRecurso recurso = requeridos.get(i);
                 System.out.println("[SOLICITUD] Hilo " + Thread.currentThread().getName() + " pidiendo " + recurso.getNombre() + " para pedido " + this.pedido.getId());
-                boolean adquirido = this.gestorRecursos.adquirirRecurso(recurso);
+                boolean adquirido = this.gestorRecursos.adquirirRecursoPara(recurso, this.pedido.getId());
                 if (adquirido) {
                     adquiridos.add(recurso);
                     System.out.println("[ASIGNADO] Hilo " + Thread.currentThread().getName() + " obtuvo " + recurso.getNombre() + " para pedido " + this.pedido.getId());
@@ -98,7 +98,7 @@ public class ProcesoSimulacionPedido implements Runnable {
             // garantizar siempre la liberacion de los recursos adquiridos en orden inverso
             for (int i = adquiridos.size() - 1; i >= 0; i--) {
                 TipoRecurso recurso = adquiridos.get(i);
-                this.gestorRecursos.liberarRecurso(recurso);
+                this.gestorRecursos.liberarRecursoDe(recurso, this.pedido.getId());
                 System.out.println("[LIBERADO] Hilo " + Thread.currentThread().getName() + " devolvio " + recurso.getNombre() + " de pedido " + this.pedido.getId());
             }
         }

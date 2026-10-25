@@ -93,7 +93,7 @@ public class ProcesoPedidoInterbloqueable implements Runnable {
         try {
             // solicitar el primer recurso
             System.out.println("[SOLICITUD-1] Pedido " + this.pedido.getId() + " solicitando " + this.recursoInicial.getNombre());
-            boolean obtenido1 = this.gestorRecursos.adquirirRecurso(this.recursoInicial);
+            boolean obtenido1 = this.gestorRecursos.adquirirRecursoPara(this.recursoInicial, this.pedido.getId());
             if (!obtenido1 || this.desapropiado) {
                 return;
             }
@@ -120,12 +120,12 @@ public class ProcesoPedidoInterbloqueable implements Runnable {
             System.out.println("[SOLICITUD-2] Pedido " + this.pedido.getId() + " esperando " + this.recursoSegundo.getNombre());
 
             // intentar adquirir el segundo recurso quedando potencialmente bloqueado
-            boolean obtenido2 = this.gestorRecursos.adquirirRecurso(this.recursoSegundo);
+            boolean obtenido2 = this.gestorRecursos.adquirirRecursoPara(this.recursoSegundo, this.pedido.getId());
             if (!obtenido2 || this.desapropiado) {
                 System.out.println("[INTERRUPCION] Pedido " + this.pedido.getId() + " fue desapropiado mientras esperaba");
                 // liberar el recurso inicial retenido antes de retornar
                 if (this.recursoInicialAdquirido) {
-                    this.gestorRecursos.liberarRecurso(this.recursoInicial);
+                    this.gestorRecursos.liberarRecursoDe(this.recursoInicial, this.pedido.getId());
                     this.recursoInicialAdquirido = false;
                 }
                 return;
@@ -150,7 +150,7 @@ public class ProcesoPedidoInterbloqueable implements Runnable {
             if (this.desapropiado) {
                 // si fue desapropiado devolver el recurso retenido y retornar a lista de espera
                 if (this.recursoInicialAdquirido) {
-                    this.gestorRecursos.liberarRecurso(this.recursoInicial);
+                    this.gestorRecursos.liberarRecursoDe(this.recursoInicial, this.pedido.getId());
                     this.recursoInicialAdquirido = false;
                     System.out.println("[LIBERACION-PREEMPT] Pedido " + this.pedido.getId() + " libero " + this.recursoInicial.getNombre() + " por desapropiacion");
                 }
@@ -159,11 +159,11 @@ public class ProcesoPedidoInterbloqueable implements Runnable {
             } else {
                 // si completo normalmente liberar ambos recursos
                 if (this.recursoSegundoAdquirido) {
-                    this.gestorRecursos.liberarRecurso(this.recursoSegundo);
+                    this.gestorRecursos.liberarRecursoDe(this.recursoSegundo, this.pedido.getId());
                     this.recursoSegundoAdquirido = false;
                 }
                 if (this.recursoInicialAdquirido) {
-                    this.gestorRecursos.liberarRecurso(this.recursoInicial);
+                    this.gestorRecursos.liberarRecursoDe(this.recursoInicial, this.pedido.getId());
                     this.recursoInicialAdquirido = false;
                 }
                 this.registro.limpiarTodoPedido(this.pedido.getId());
