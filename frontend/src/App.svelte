@@ -1,32 +1,39 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import PanelRecursos from "./components/PanelRecursos.svelte";
   import PanelPedidos from "./components/PanelPedidos.svelte";
   import PanelDeadlock from "./components/PanelDeadlock.svelte";
+  import PanelEstadisticas from "./components/PanelEstadisticas.svelte";
   import MapaAlmacen from "./components/MapaAlmacen.svelte";
-  import { obtenerEstado } from "./services/servicioApi.js";
+  import { obtenerRecursos, obtenerEstadisticas } from "./services/servicioApi.js";
   import { conectarWebSocket } from "./services/servicioWebSocket.js";
   import { recursos, pedidos, almacen, alertaDeadlock } from "./stores/tiendaSimulacion.js";
 
   let datosRecursos = [];
+  let datosEstadisticas = null;
   let celdasAlmacen = [];
+  let intervalo = null;
+
+  async function actualizarTablero() {
+    try {
+      const lista = await obtenerRecursos();
+      datosRecursos = lista;
+      recursos.set(lista);
+    } catch (e) {
+      console.error("Error obteniendo recursos:", e);
+    }
+    try {
+      const metricas = await obtenerEstadisticas();
+      datosEstadisticas = metricas;
+    } catch (e) {
+      console.error("Error obteniendo estadisticas:", e);
+    }
+  }
 
   onMount(async () => {
-    // conectar al backend para obtener estado inicial
-    try {
-      const estado = await obtenerEstado();
-      datosRecursos = [
-        { nombre: "Montacargas", disponibles: estado.montacargas },
-        { nombre: "Estaciones Empaque", disponibles: estado.estacionesEmpaque },
-        { nombre: "Areas Carga", disponibles: estado.areasCarga },
-        { nombre: "Encargados Bodega", disponibles: estado.encargadosBodega },
-        { nombre: "Estaciones Calidad", disponibles: estado.estacionesCalidad },
-        { nombre: "Sistemas Escaneo", disponibles: estado.sistemasEscaneo }
-      ];
-      recursos.set(datosRecursos);
-    } catch (e) {
-      console.error("Error obteniendo estado:", e);
-    }
+    // cargar estado inicial y programar actualizacion periodica
+    await actualizarTablero();
+    intervalo = setInterval(actualizarTablero, 2000);
 
     // conectar WebSocket para actualizaciones en tiempo real
     conectarWebSocket((mensaje) => {
@@ -48,6 +55,12 @@
       }
     });
   });
+
+  onDestroy(() => {
+    if (intervalo) {
+      clearInterval(intervalo);
+    }
+  });
 </script>
 
 <div class="container-fluid">
@@ -65,6 +78,11 @@
     </div>
     <div class="col-md-6">
       <MapaAlmacen celdas={celdasAlmacen} />
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-6">
+      <PanelEstadisticas datos={datosEstadisticas} />
     </div>
   </div>
 </div>
