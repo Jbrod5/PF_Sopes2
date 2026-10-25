@@ -113,6 +113,46 @@ public class ServicioRecepcion implements Runnable {
     }
 
     /**
+     * Registrar manualmente un lote indicando producto y cantidad.
+     *
+     * @param idProducto identificador del producto del catalogo.
+     * @param cantidad unidades del lote.
+     * @return verdadero si fue depositado en el buffer hacia inventario.
+     */
+    public boolean ingresarLoteManual(String idProducto, int cantidad) {
+        if (idProducto == null || cantidad <= 0) {
+            return false;
+        }
+        Producto elegido = null;
+        for (int i = 0; i < this.catalogoProductos.size(); i++) {
+            Producto actual = this.catalogoProductos.get(i);
+            if (actual.getId().equals(idProducto)) {
+                elegido = actual;
+            }
+        }
+        if (elegido == null) {
+            return false;
+        }
+        String idLote = "LOT-MAN-" + this.contadorLote;
+        this.contadorLote = this.contadorLote + 1;
+        LoteMercancia lote = new LoteMercancia(idLote, elegido, cantidad);
+        return this.recibirLoteDeCamion(lote);
+    }
+
+    /**
+     * Obtener una copia del catalogo de productos disponibles.
+     *
+     * @return lista de productos del catalogo.
+     */
+    public List<Producto> obtenerCatalogo() {
+        List<Producto> copia = new ArrayList<Producto>();
+        for (int i = 0; i < this.catalogoProductos.size(); i++) {
+            copia.add(this.catalogoProductos.get(i));
+        }
+        return copia;
+    }
+
+    /**
      * Iniciar la simulacion continua en segundo plano de llegada de mercaderia.
      */
     public void iniciar() {

@@ -73,7 +73,7 @@ public class Main {
         hiloGeneradorVivo.start();
 
         // iniciar servidor javalin en el puerto 7070 para la conexion con el frontend
-        iniciarServidor(colaPedidos, gestorRecursos, motorVivo);
+        iniciarServidor(colaPedidos, gestorRecursos, motorVivo, catalogoProductos);
 
         formato.imprimirEncabezado("FIN DE LA EJECUCION DEL MODULO 2");
     }
@@ -279,9 +279,16 @@ public class Main {
     }
 
     // iniciar servidor javalin para la conexion con el frontend
-    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor) {
+    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos) {
         AlmacenPaginado almacenServidor = new AlmacenPaginado(4, 3, 6);
         ControladorServidor servidor = new ControladorServidor(cola, gestor, almacenServidor, motor);
+        BufferRecepcion bufferVivo = new BufferRecepcion(10);
+        ControladorInventario inventarioVivo = new ControladorInventario(almacenServidor);
+        ServicioRecepcion recepcionViva = new ServicioRecepcion(bufferVivo, productos);
+        ServicioInventario inventarioServicio = new ServicioInventario(bufferVivo, inventarioVivo, 300L);
+        Thread hiloInventario = new Thread(inventarioServicio, "Hilo-Inventario-Vivo");
+        hiloInventario.start();
+        servidor.setServicioRecepcion(recepcionViva);
         System.out.println("Servidor Javalin iniciado en el puerto 7070");
     }
 }

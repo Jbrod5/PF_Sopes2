@@ -8,12 +8,14 @@ import io.javalin.websocket.WsMessageContext;
 import com.redxela.service.ColaPrioridadPedidos;
 import com.redxela.service.MotorPlanificador;
 import com.redxela.service.PoliticaPlanificacion;
+import com.redxela.service.ServicioRecepcion;
 import com.redxela.concurrencia.GestorRecursos;
 import com.redxela.concurrencia.ProcesoSimulacionPedido;
 import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
 import com.redxela.concurrencia.deadlock.InformacionConflicto;
 import com.redxela.almacen.AlmacenPaginado;
 import com.redxela.model.Pedido;
+import com.redxela.model.Producto;
 import com.redxela.model.TipoRecurso;
 import com.redxela.model.Cliente;
 import com.redxela.model.NivelServicio;
@@ -37,6 +39,9 @@ public class ControladorServidor {
 
     // referencia opcional al motor para reportar procesamiento y metricas
     private final MotorPlanificador motor;
+
+    // referencia opcional a recepcion para el ingreso manual de mercaderia
+    private ServicioRecepcion recepcion;
 
     /**
      * Constructor sobrecargado que inicializa el servidor con los servicios existentes.
@@ -63,6 +68,7 @@ public class ControladorServidor {
         this.gestor = gestor;
         this.almacen = almacen;
         this.motor = motor;
+        this.recepcion = null;
         this.simulador = new SimuladorDeadlock(gestor);
         // crear la instancia de javalin en el puerto 7070
         String rutaEstatica = resolverRutaEstatica();
@@ -105,6 +111,8 @@ public class ControladorServidor {
         this.app.get("/api/cola", this::manejadorCola);
         this.app.get("/api/estadisticas", this::manejadorEstadisticas);
         this.app.get("/api/almacen", this::manejadorAlmacen);
+        this.app.get("/api/productos", this::manejadorProductos);
+        this.app.post("/api/recepcion", this::manejadorRegistrarMercaderia);
         this.app.get("/api/deadlock/detalle", this::manejadorDetalleDeadlock);
         this.app.post("/api/pedidos", this::manejadorRegistrarPedido);
         this.app.post("/api/politica", this::manejadorCambiarPolitica);
@@ -274,6 +282,55 @@ public class ControladorServidor {
         ctx.contentType("application/json").result(respuesta);
     }
 
+    // manejar solicitud del catalogo de productos disponibles
+    private void manejadorProductos(Context ctx) {
+        if (this.recepcion == null) {
+            ctx.contentType("application/json").result("[]");
+            return;
+        }
+        List<Producto> catalogo = this.recepcion.obtenerCatalogo();
+        String elementos = "";
+        for (int i = 0; i < catalogo.size(); i++) {
+            Producto producto = catalogo.get(i);
+            String elemento = "{\"id\":\"" + producto.getId() + "\""
+                + ",\"nombre\":\"" + producto.getNombre() + "\""
+                + ",\"mercancia\":\"" + producto.getTipoMercancia().getNombre() + "\"}";
+            if (i > 0) {
+                elementos = elementos + ",";
+            }
+            elementos = elementos + elemento;
+        }
+        ctx.contentType("application/json").result("[" + elementos + "]");
+    }
+
+    // registrar manualmente la llegada de mercaderia
+    private void manejadorRegistrarMercaderia(Context ctx) {
+        if (this.recepcion == null) {
+            ctx.status(503).contentType("application/json").result("{\"error\":\"Recepcion no disponible\"}");
+            return;
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode cuerpo = mapper.readTree(ctx.body());
+            String idProducto = "";
+            if (cuerpo.has("producto")) {
+                idProducto = cuerpo.get("producto").asText();
+            }
+            int cantidad = 0;
+            if (cuerpo.has("cantidad")) {
+                cantidad = cuerpo.get("cantidad").asInt(0);
+            }
+            boolean ingresado = this.recepcion.ingresarLoteManual(idProducto, cantidad);
+            if (ingresado) {
+                ctx.contentType("application/json").result("{\"mensaje\":\"Mercaderia registrada exitosamente\"}");
+            } else {
+                ctx.status(400).contentType("application/json").result("{\"error\":\"Producto desconocido o cantidad invalida\"}");
+            }
+        } catch (Exception e) {
+            ctx.status(400).contentType("application/json").result("{\"error\":\"Error procesando solicitud\"}");
+        }
+    }
+
     // manejar solicitud de detalle del conflicto de recursos
     private void manejadorDetalleDeadlock(Context ctx) {
         InformacionConflicto conflicto = this.simulador.getUltimoConflicto();
@@ -379,6 +436,15 @@ public class ControladorServidor {
         } catch (Exception e) {
             ctx.status(400).contentType("application/json").result("{\"error\":\"Error procesando solicitud\"}");
         }
+    }
+
+    /**
+     * Asignar el servicio de recepcion para el ingreso manual de mercaderia.
+     *
+     * @param recepcion servicio de recepcion con acceso al buffer.
+     */
+    public void setServicioRecepcion(ServicioRecepcion recepcion) {
+        this.recepcion = recepcion;
     }
 
     /**
