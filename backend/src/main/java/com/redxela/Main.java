@@ -64,8 +64,16 @@ public class Main {
         // demostrar deadlock y resolucion manual
         ejecutarEtapaDeadlock(formato, colaPedidos, gestorRecursos, catalogoClientes);
 
+        // iniciar despacho continuo para atender la interfaz en vivo
+        MotorPlanificador motorVivo = new MotorPlanificador(colaPedidos, gestorRecursos);
+        Thread hiloMotorVivo = new Thread(motorVivo, "Hilo-Planificador-Vivo");
+        hiloMotorVivo.start();
+        GeneradorPedidosAutomatico generadorVivo = new GeneradorPedidosAutomatico(colaPedidos, catalogoClientes, catalogoProductos, 2000L);
+        Thread hiloGeneradorVivo = new Thread(generadorVivo, "Hilo-Generador-Vivo");
+        hiloGeneradorVivo.start();
+
         // iniciar servidor javalin en el puerto 7070 para la conexion con el frontend
-        iniciarServidor(colaPedidos, gestorRecursos);
+        iniciarServidor(colaPedidos, gestorRecursos, motorVivo);
 
         formato.imprimirEncabezado("FIN DE LA EJECUCION DEL MODULO 2");
     }
@@ -271,9 +279,9 @@ public class Main {
     }
 
     // iniciar servidor javalin para la conexion con el frontend
-    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor) {
+    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor) {
         AlmacenPaginado almacenServidor = new AlmacenPaginado(4, 3, 6);
-        ControladorServidor servidor = new ControladorServidor(cola, gestor, almacenServidor);
+        ControladorServidor servidor = new ControladorServidor(cola, gestor, almacenServidor, motor);
         System.out.println("Servidor Javalin iniciado en el puerto 7070");
     }
 }
