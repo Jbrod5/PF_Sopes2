@@ -4,13 +4,17 @@
   import PanelPedidos from "./components/PanelPedidos.svelte";
   import PanelDeadlock from "./components/PanelDeadlock.svelte";
   import PanelEstadisticas from "./components/PanelEstadisticas.svelte";
+  import PanelProcesando from "./components/PanelProcesando.svelte";
+  import PanelCola from "./components/PanelCola.svelte";
   import MapaAlmacen from "./components/MapaAlmacen.svelte";
-  import { obtenerRecursos, obtenerEstadisticas } from "./services/servicioApi.js";
+  import { obtenerRecursos, obtenerEstadisticas, obtenerProcesando, obtenerCola } from "./services/servicioApi.js";
   import { conectarWebSocket } from "./services/servicioWebSocket.js";
   import { recursos, pedidos, almacen, alertaDeadlock } from "./stores/tiendaSimulacion.js";
 
   let datosRecursos = [];
   let datosEstadisticas = null;
+  let datosProcesando = [];
+  let datosCola = null;
   let celdasAlmacen = [];
   let intervalo = null;
 
@@ -27,6 +31,18 @@
       datosEstadisticas = metricas;
     } catch (e) {
       console.error("Error obteniendo estadisticas:", e);
+    }
+    try {
+      const activos = await obtenerProcesando();
+      datosProcesando = activos;
+    } catch (e) {
+      console.error("Error obteniendo procesando:", e);
+    }
+    try {
+      const espera = await obtenerCola();
+      datosCola = espera;
+    } catch (e) {
+      console.error("Error obteniendo cola:", e);
     }
   }
 
@@ -83,6 +99,14 @@
   <div class="row">
     <div class="col-md-6">
       <PanelEstadisticas datos={datosEstadisticas} />
+    </div>
+    <div class="col-md-6">
+      <PanelProcesando datos={datosProcesando} />
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-6">
+      <PanelCola datos={datosCola} />
     </div>
   </div>
 </div>
