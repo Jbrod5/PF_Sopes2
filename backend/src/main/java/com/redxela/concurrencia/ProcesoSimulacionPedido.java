@@ -19,6 +19,12 @@ public class ProcesoSimulacionPedido implements Runnable {
     // tiempo en milisegundos que el pedido retiene los recursos simulando trabajo
     private final long tiempoProcesamientoMs;
 
+    // marca de inicio de espera de recursos
+    private volatile long inicioEsperaMs;
+
+    // marca de inicio de procesamiento efectivo
+    private volatile long inicioProcesoMs;
+
     /**
      * Constructor sobrecargado con pedido y gestor de recursos.
      *
@@ -34,6 +40,8 @@ public class ProcesoSimulacionPedido implements Runnable {
             cantidad = 1;
         }
         this.tiempoProcesamientoMs = cantidad * 300L;
+        this.inicioEsperaMs = 0L;
+        this.inicioProcesoMs = 0L;
     }
 
     /**
@@ -47,6 +55,8 @@ public class ProcesoSimulacionPedido implements Runnable {
         this.pedido = pedido;
         this.gestorRecursos = gestorRecursos;
         this.tiempoProcesamientoMs = tiempoProcesamientoMs;
+        this.inicioEsperaMs = 0L;
+        this.inicioProcesoMs = 0L;
     }
 
     /**
@@ -54,6 +64,8 @@ public class ProcesoSimulacionPedido implements Runnable {
      */
     @Override
     public void run() {
+        // registrar marca de inicio de espera de recursos
+        this.inicioEsperaMs = System.currentTimeMillis();
         // obtener los recursos requeridos por el pedido
         List<TipoRecurso> requeridos = this.pedido.obtenerRecursosRequeridos();
         List<TipoRecurso> adquiridos = new ArrayList<TipoRecurso>();
@@ -80,6 +92,7 @@ public class ProcesoSimulacionPedido implements Runnable {
 
             // una vez obtenidos todos los recursos cambiar estado a procesando
             this.pedido.setEstado(EstadoPedido.PROCESANDO);
+            this.inicioProcesoMs = System.currentTimeMillis();
             System.out.println("[PROCESANDO] Pedido " + this.pedido.getId() + " en ejecucion (" + this.tiempoProcesamientoMs + " ms)");
 
             // simular el trabajo con los recursos asignados
@@ -102,6 +115,62 @@ public class ProcesoSimulacionPedido implements Runnable {
                 System.out.println("[LIBERADO] Hilo " + Thread.currentThread().getName() + " devolvio " + recurso.getNombre() + " de pedido " + this.pedido.getId());
             }
         }
+    }
+
+    /**
+     * Obtener el tiempo acumulado en espera de recursos en milisegundos.
+     *
+     * @return milisegundos en espera.
+     */
+    public long getTiempoEsperaMs() {
+        if (this.inicioEsperaMs == 0L) {
+            return 0L;
+        }
+        long finEspera = this.inicioProcesoMs;
+        if (finEspera == 0L) {
+            finEspera = System.currentTimeMillis();
+        }
+        return finEspera - this.inicioEsperaMs;
+    }
+
+    /**
+     * Obtener el tiempo restante estimado de procesamiento en milisegundos.
+     *
+     * @return milisegundos restantes.
+     */
+    public long getTiempoRestanteMs() {
+        if (this.inicioProcesoMs == 0L) {
+            return this.tiempoProcesamientoMs;
+        }
+        long finEstimado = this.inicioProcesoMs + this.tiempoProcesamientoMs;
+        long restante = finEstimado - System.currentTimeMillis();
+        if (restante < 0L) {
+            return 0L;
+        }
+        return restante;
+    }
+
+    /**
+     * Obtener el avance porcentual estimado del procesamiento.
+     *
+     * @return entero entre 0 y 100.
+     */
+    public int getProgreso() {
+        if (this.inicioProcesoMs == 0L) {
+            return 0;
+        }
+        if (this.tiempoProcesamientoMs <= 0L) {
+            return 100;
+        }
+        long transcurrido = System.currentTimeMillis() - this.inicioProcesoMs;
+        long avance = transcurrido * 100L / this.tiempoProcesamientoMs;
+        if (avance > 100L) {
+            return 100;
+        }
+        if (avance < 0L) {
+            return 0;
+        }
+        return (int) avance;
     }
 
     /**

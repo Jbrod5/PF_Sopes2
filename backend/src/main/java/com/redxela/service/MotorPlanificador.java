@@ -27,6 +27,9 @@ public class MotorPlanificador implements Runnable {
     // lista de hilos de pedidos actualmente en ejecucion
     private final List<Thread> hilosActivos;
 
+    // lista de tareas de pedidos actualmente en ejecucion
+    private final List<ProcesoSimulacionPedido> tareasActivas;
+
     // cerrojo para proteger el registro de hilos activos
     private final ReentrantLock cerrojoHilos;
 
@@ -42,6 +45,7 @@ public class MotorPlanificador implements Runnable {
         this.activo = false;
         this.pausado = false;
         this.hilosActivos = new ArrayList<Thread>();
+        this.tareasActivas = new ArrayList<ProcesoSimulacionPedido>();
         this.cerrojoHilos = new ReentrantLock(true);
     }
 
@@ -104,6 +108,7 @@ public class MotorPlanificador implements Runnable {
                     this.cerrojoHilos.lock();
                     try {
                         this.hilosActivos.add(hiloPedido);
+                        this.tareasActivas.add(tarea);
                     } finally {
                         this.cerrojoHilos.unlock();
                     }
@@ -132,6 +137,7 @@ public class MotorPlanificador implements Runnable {
                 Thread h = this.hilosActivos.get(i);
                 if (!h.isAlive()) {
                     this.hilosActivos.remove(i);
+                    this.tareasActivas.remove(i);
                 }
             }
         } finally {
@@ -172,6 +178,25 @@ public class MotorPlanificador implements Runnable {
         this.cerrojoHilos.lock();
         try {
             return this.hilosActivos.size();
+        } finally {
+            this.cerrojoHilos.unlock();
+        }
+    }
+
+    /**
+     * Obtener una copia de las tareas que se encuentran procesando pedidos activamente.
+     *
+     * @return lista de tareas en ejecucion simultanea.
+     */
+    public List<ProcesoSimulacionPedido> obtenerTareasActivas() {
+        this.limpiarHilosFinalizados();
+        this.cerrojoHilos.lock();
+        try {
+            List<ProcesoSimulacionPedido> copia = new ArrayList<ProcesoSimulacionPedido>();
+            for (int i = 0; i < this.tareasActivas.size(); i++) {
+                copia.add(this.tareasActivas.get(i));
+            }
+            return copia;
         } finally {
             this.cerrojoHilos.unlock();
         }
