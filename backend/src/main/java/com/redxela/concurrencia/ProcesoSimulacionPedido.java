@@ -3,6 +3,7 @@ package com.redxela.concurrencia;
 import com.redxela.model.EstadoPedido;
 import com.redxela.model.Pedido;
 import com.redxela.model.TipoRecurso;
+import com.redxela.service.RegistroEstadisticas;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +26,9 @@ public class ProcesoSimulacionPedido implements Runnable {
     // marca de inicio de procesamiento efectivo
     private volatile long inicioProcesoMs;
 
+    // registro opcional de metricas de atencion
+    private final RegistroEstadisticas estadisticas;
+
     /**
      * Constructor sobrecargado con pedido y gestor de recursos.
      *
@@ -42,6 +46,7 @@ public class ProcesoSimulacionPedido implements Runnable {
         this.tiempoProcesamientoMs = cantidad * 300L;
         this.inicioEsperaMs = 0L;
         this.inicioProcesoMs = 0L;
+        this.estadisticas = null;
     }
 
     /**
@@ -57,6 +62,27 @@ public class ProcesoSimulacionPedido implements Runnable {
         this.tiempoProcesamientoMs = tiempoProcesamientoMs;
         this.inicioEsperaMs = 0L;
         this.inicioProcesoMs = 0L;
+        this.estadisticas = null;
+    }
+
+    /**
+     * Constructor sobrecargado con registro de metricas de atencion.
+     *
+     * @param pedido pedido a simular.
+     * @param gestorRecursos instancia compartida del gestor de recursos.
+     * @param estadisticas registro donde anotar los tiempos medidos.
+     */
+    public ProcesoSimulacionPedido(Pedido pedido, GestorRecursos gestorRecursos, RegistroEstadisticas estadisticas) {
+        this.pedido = pedido;
+        this.gestorRecursos = gestorRecursos;
+        int cantidad = pedido.getCantidadTotal();
+        if (cantidad <= 0) {
+            cantidad = 1;
+        }
+        this.tiempoProcesamientoMs = cantidad * 300L;
+        this.inicioEsperaMs = 0L;
+        this.inicioProcesoMs = 0L;
+        this.estadisticas = estadisticas;
     }
 
     /**
@@ -101,6 +127,13 @@ public class ProcesoSimulacionPedido implements Runnable {
             // actualizar estado a completado
             this.pedido.setEstado(EstadoPedido.COMPLETADO);
             System.out.println("[COMPLETADO] Pedido " + this.pedido.getId() + " ha finalizado su procesamiento");
+
+            // anotar los tiempos medidos en el registro de metricas
+            if (this.estadisticas != null) {
+                long esperaMedida = this.getTiempoEsperaMs();
+                long procesoMedido = System.currentTimeMillis() - this.inicioProcesoMs;
+                this.estadisticas.registrarPedidoCompletado(esperaMedida, procesoMedido);
+            }
 
         } catch (InterruptedException excepcion) {
             // procesar interrupcion del hilo

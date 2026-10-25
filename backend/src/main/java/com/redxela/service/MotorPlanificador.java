@@ -33,6 +33,9 @@ public class MotorPlanificador implements Runnable {
     // cerrojo para proteger el registro de hilos activos
     private final ReentrantLock cerrojoHilos;
 
+    // registro de metricas de atencion de pedidos
+    private final RegistroEstadisticas estadisticas;
+
     /**
      * Constructor sobrecargado con cola de pedidos y gestor de recursos.
      *
@@ -46,6 +49,7 @@ public class MotorPlanificador implements Runnable {
         this.pausado = false;
         this.hilosActivos = new ArrayList<Thread>();
         this.tareasActivas = new ArrayList<ProcesoSimulacionPedido>();
+        this.estadisticas = new RegistroEstadisticas();
         this.cerrojoHilos = new ReentrantLock(true);
     }
 
@@ -101,7 +105,7 @@ public class MotorPlanificador implements Runnable {
                     System.out.println("[PLANIFICADOR] Despachando pedido " + pedido.getId() + " (" + pedido.getNivelServicio().getNombre() + ", " + pedido.getCantidadTotal() + " articulos)");
 
                     // crear la tarea del pedido
-                    ProcesoSimulacionPedido tarea = new ProcesoSimulacionPedido(pedido, this.gestorRecursos);
+                    ProcesoSimulacionPedido tarea = new ProcesoSimulacionPedido(pedido, this.gestorRecursos, this.estadisticas);
                     Thread hiloPedido = new Thread(tarea, "Atencion-" + pedido.getId());
 
                     // registrar y lanzar el hilo de procesamiento
@@ -181,6 +185,15 @@ public class MotorPlanificador implements Runnable {
         } finally {
             this.cerrojoHilos.unlock();
         }
+    }
+
+    /**
+     * Obtener el registro de metricas de atencion del motor.
+     *
+     * @return instancia del registro de estadisticas.
+     */
+    public RegistroEstadisticas getEstadisticas() {
+        return this.estadisticas;
     }
 
     /**

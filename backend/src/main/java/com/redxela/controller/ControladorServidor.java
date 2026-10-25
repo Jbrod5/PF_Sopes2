@@ -6,18 +6,22 @@ import io.javalin.http.staticfiles.Location;
 import io.javalin.websocket.WsMessageContext;
 
 import com.redxela.service.ColaPrioridadPedidos;
+import com.redxela.service.MotorPlanificador;
 import com.redxela.service.PoliticaPlanificacion;
 import com.redxela.concurrencia.GestorRecursos;
+import com.redxela.concurrencia.ProcesoSimulacionPedido;
 import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
 import com.redxela.concurrencia.deadlock.InformacionConflicto;
 import com.redxela.almacen.AlmacenPaginado;
 import com.redxela.model.Pedido;
+import com.redxela.model.TipoRecurso;
 import com.redxela.model.Cliente;
 import com.redxela.model.NivelServicio;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
+import java.util.List;
 
 // servidor javalin que expone rutas para el modulo 3 y el sistema completo
 public class ControladorServidor {
@@ -31,6 +35,9 @@ public class ControladorServidor {
     private final AlmacenPaginado almacen;
     private final SimuladorDeadlock simulador;
 
+    // referencia opcional al motor para reportar procesamiento y metricas
+    private final MotorPlanificador motor;
+
     /**
      * Constructor sobrecargado que inicializa el servidor con los servicios existentes.
      *
@@ -39,10 +46,23 @@ public class ControladorServidor {
      * @param almacen almacen paginado del centro.
      */
     public ControladorServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, AlmacenPaginado almacen) {
+        this(cola, gestor, almacen, null);
+    }
+
+    /**
+     * Constructor sobrecargado que incluye el motor planificador para observacion.
+     *
+     * @param cola cola de pedidos activa.
+     * @param gestor gestor de recursos compartidos.
+     * @param almacen almacen paginado del centro.
+     * @param motor motor despachador de pedidos.
+     */
+    public ControladorServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, AlmacenPaginado almacen, MotorPlanificador motor) {
         // inicializar referencias compartidas
         this.cola = cola;
         this.gestor = gestor;
         this.almacen = almacen;
+        this.motor = motor;
         this.simulador = new SimuladorDeadlock(gestor);
         // crear la instancia de javalin en el puerto 7070
         String rutaEstatica = resolverRutaEstatica();
@@ -80,7 +100,12 @@ public class ControladorServidor {
 
         // linea en blanco tras apertura de bloque
         this.app.get("/api/estado", this::manejadorEstado);
+        this.app.get("/api/recursos", this::manejadorRecursos);
+        this.app.get("/api/procesando", this::manejadorProcesando);
+        this.app.get("/api/cola", this::manejadorCola);
+        this.app.get("/api/estadisticas", this::manejadorEstadisticas);
         this.app.get("/api/almacen", this::manejadorAlmacen);
+        this.app.get("/api/deadlock/detalle", this::manejadorDetalleDeadlock);
         this.app.post("/api/pedidos", this::manejadorRegistrarPedido);
         this.app.post("/api/politica", this::manejadorCambiarPolitica);
         this.app.post("/api/deadlock/inducir", this::manejadorInducirDeadlock);
@@ -144,6 +169,130 @@ public class ControladorServidor {
             + ",\"espaciosDisponibles\":" + almacen.getEspaciosDisponibles()
             + ",\"celdas\":[" + celdas + "]}";
         ctx.contentType("application/json").result(json);
+    }
+
+    // manejar solicitud de recursos con tenedores actuales
+    private void manejadorRecursos(Context ctx) {
+        // construir arreglo con el estado de cada recurso compartido
+        String elementos = "";
+        TipoRecurso[] tipos = TipoRecurso.values();
+        for (int i = 0; i < tipos.length; i++) {
+            TipoRecurso tipo = tipos[i];
+            List<String> tenedores = this.gestor.obtenerTenedores(tipo);
+            String listaTenedores = "";
+            for (int j = 0; j < tenedores.size(); j++) {
+                if (j > 0) {
+                    listaTenedores = listaTenedores + ",";
+                }
+                listaTenedores = listaTenedores + "\"" + tenedores.get(j) + "\"";
+            }
+            String elemento = "{\"nombre\":\"" + tipo.getNombre() + "\""
+                + ",\"total\":" + this.gestor.consultarTotal(tipo)
+                + ",\"disponibles\":" + this.gestor.consultarDisponibles(tipo)
+                + ",\"enUso\":" + this.gestor.consultarEnUso(tipo)
+                + ",\"tenedores\":[" + listaTenedores + "]}";
+            if (i > 0) {
+                elementos = elementos + ",";
+            }
+            elementos = elementos + elemento;
+        }
+        ctx.contentType("application/json").result("[" + elementos + "]");
+    }
+
+    // manejar solicitud de pedidos en procesamiento con progreso
+    private void manejadorProcesando(Context ctx) {
+        // responder lista vacia cuando no hay motor asociado
+        if (this.motor == null) {
+            ctx.contentType("application/json").result("[]");
+            return;
+        }
+        List<ProcesoSimulacionPedido> tareas = this.motor.obtenerTareasActivas();
+        String elementos = "";
+        for (int i = 0; i < tareas.size(); i++) {
+            ProcesoSimulacionPedido tarea = tareas.get(i);
+            Pedido pedido = tarea.getPedido();
+            String elemento = "{\"id\":\"" + pedido.getId() + "\""
+                + ",\"cliente\":\"" + pedido.getCliente().getNombre() + "\""
+                + ",\"nivel\":\"" + pedido.getNivelServicio().getNombre() + "\""
+                + ",\"articulos\":" + pedido.getCantidadTotal()
+                + ",\"estado\":\"" + pedido.getEstado().name() + "\""
+                + ",\"progreso\":" + tarea.getProgreso()
+                + ",\"restanteMs\":" + tarea.getTiempoRestanteMs()
+                + ",\"esperaMs\":" + tarea.getTiempoEsperaMs()
+                + "}";
+            if (i > 0) {
+                elementos = elementos + ",";
+            }
+            elementos = elementos + elemento;
+        }
+        ctx.contentType("application/json").result("[" + elementos + "]");
+    }
+
+    // manejar solicitud de lista de espera con criterio de orden
+    private void manejadorCola(Context ctx) {
+        List<Pedido> espera = this.cola.obtenerPedidosEnEspera();
+        String elementos = "";
+        long ahora = System.currentTimeMillis();
+        for (int i = 0; i < espera.size(); i++) {
+            Pedido pedido = espera.get(i);
+            String elemento = "{\"posicion\":" + (i + 1)
+                + ",\"id\":\"" + pedido.getId() + "\""
+                + ",\"cliente\":\"" + pedido.getCliente().getNombre() + "\""
+                + ",\"nivel\":\"" + pedido.getNivelServicio().getNombre() + "\""
+                + ",\"articulos\":" + pedido.getCantidadTotal()
+                + ",\"esperaMs\":" + (ahora - pedido.getTiempoCreacionMs())
+                + "}";
+            if (i > 0) {
+                elementos = elementos + ",";
+            }
+            elementos = elementos + elemento;
+        }
+        String respuesta = "{\"politica\":\"" + this.cola.getPoliticaActual().getNombre() + "\""
+            + ",\"enEspera\":" + espera.size()
+            + ",\"pedidos\":[" + elementos + "]}";
+        ctx.contentType("application/json").result(respuesta);
+    }
+
+    // manejar solicitud de estadisticas generales del sistema
+    private void manejadorEstadisticas(Context ctx) {
+        int completados = 0;
+        long esperaPromedio = 0L;
+        long procesoPromedio = 0L;
+        int enProceso = 0;
+        if (this.motor != null) {
+            completados = this.motor.getEstadisticas().obtenerCompletados();
+            esperaPromedio = this.motor.getEstadisticas().obtenerEsperaPromedioMs();
+            procesoPromedio = this.motor.getEstadisticas().obtenerProcesoPromedioMs();
+            enProceso = this.motor.getCantidadHilosActivos();
+        }
+        String respuesta = "{\"completados\":" + completados
+            + ",\"esperaPromedioMs\":" + esperaPromedio
+            + ",\"procesoPromedioMs\":" + procesoPromedio
+            + ",\"enEspera\":" + this.cola.getCantidadEnEspera()
+            + ",\"enProceso\":" + enProceso
+            + "}";
+        ctx.contentType("application/json").result(respuesta);
+    }
+
+    // manejar solicitud de detalle del conflicto de recursos
+    private void manejadorDetalleDeadlock(Context ctx) {
+        InformacionConflicto conflicto = this.simulador.getUltimoConflicto();
+        if (conflicto == null) {
+            ctx.contentType("application/json").result("{\"activo\":false}");
+            return;
+        }
+        String respuesta = "{\"activo\":true"
+            + ",\"resuelto\":" + conflicto.isResuelto()
+            + ",\"ganador\":\"" + conflicto.getIdPedidoGanador() + "\""
+            + ",\"causa\":\"" + conflicto.getCausaBloqueo() + "\""
+            + ",\"pedido1\":{\"id\":\"" + conflicto.getIdPedido1() + "\""
+            + ",\"retiene\":\"" + conflicto.getRecursoRetenido1().getNombre() + "\""
+            + ",\"espera\":\"" + conflicto.getRecursoSolicitado1().getNombre() + "\"}"
+            + ",\"pedido2\":{\"id\":\"" + conflicto.getIdPedido2() + "\""
+            + ",\"retiene\":\"" + conflicto.getRecursoRetenido2().getNombre() + "\""
+            + ",\"espera\":\"" + conflicto.getRecursoSolicitado2().getNombre() + "\"}"
+            + "}";
+        ctx.contentType("application/json").result(respuesta);
     }
 
     // registrar pedido manual recibido por post
