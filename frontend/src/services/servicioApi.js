@@ -38,3 +38,49 @@ export async function resolverDeadlock(id) {
   });
   return res.text();
 }
+
+// obtener recursos con tenedores actuales
+export async function obtenerRecursos() {
+  const res = await fetch("http://localhost:7070/api/recursos");
+  return res.json();
+}
+
+// obtener pedidos en procesamiento con progreso
+export async function obtenerProcesando() {
+  const res = await fetch("http://localhost:7070/api/procesando");
+  return res.json();
+}
+
+// obtener lista de espera con criterio de orden
+export async function obtenerCola() {
+  const res = await fetch("http://localhost:7070/api/cola");
+  return res.json();
+}
+
+// obtener estadisticas generales del sistema
+export async function obtenerEstadisticas() {
+  const res = await fetch("http://localhost:7070/api/estadisticas");
+  return res.json();
+}
+
+// obtener detalle del conflicto de recursos
+export async function obtenerDetalleDeadlock() {
+  const res = await fetch("http://localhost:7070/api/deadlock/detalle");
+  return res.json();
+}
+
+// obtener catalogo de productos disponibles
+export async function obtenerProductos() {
+  const res = await fetch("http://localhost:7070/api/productos");
+  return res.json();
+}
+
+// registrar manualmente la llegada de mercaderia
+export async function registrarMercaderia(producto, cantidad) {
+  const res = await fetch("http://localhost:7070/api/recepcion", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ producto, cantidad }),
+  });
+  return res.json();
+}
