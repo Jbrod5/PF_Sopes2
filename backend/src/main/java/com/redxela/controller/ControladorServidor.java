@@ -12,15 +12,12 @@ import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
 import com.redxela.concurrencia.deadlock.InformacionConflicto;
 import com.redxela.almacen.AlmacenPaginado;
 import com.redxela.model.Pedido;
-import com.redxela.model.EstadoPedido;
 import com.redxela.model.Cliente;
 import com.redxela.model.NivelServicio;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
 
 // servidor javalin que expone rutas para el modulo 3 y el sistema completo
 public class ControladorServidor {
@@ -106,65 +103,47 @@ public class ControladorServidor {
     // manejar solicitud de estado general del sistema
     private void manejadorEstado(Context ctx) {
         // construir respuesta JSON con el estado de recursos
-        StringBuilder json = new StringBuilder();
-        json.append("{");
-        json.append("\"montacargas\":");
-        json.append(gestor.consultarDisponibles(com.redxela.model.TipoRecurso.MONTACARGAS));
-        json.append(",");
-        json.append("\"estacionesEmpaque\":");
-        json.append(gestor.consultarDisponibles(com.redxela.model.TipoRecurso.ESTACION_EMPAQUE));
-        json.append(",");
-        json.append("\"areasCarga\":");
-        json.append(gestor.consultarDisponibles(com.redxela.model.TipoRecurso.AREA_CARGA));
-        json.append(",");
-        json.append("\"encargadosBodega\":");
-        json.append(gestor.consultarDisponibles(com.redxela.model.TipoRecurso.ENCARGADO_BODEGA));
-        json.append(",");
-        json.append("\"estacionesCalidad\":");
-        json.append(gestor.consultarDisponibles(com.redxela.model.TipoRecurso.ESTACION_CONTROL_CALIDAD));
-        json.append(",");
-        json.append("\"sistemasEscaneo\":");
-        json.append(gestor.consultarDisponibles(com.redxela.model.TipoRecurso.SISTEMA_ESCANEO));
-        json.append("}");
-        ctx.contentType("application/json").result(json.toString());
+        String json = "{"
+            + "\"montacargas\":" + gestor.consultarDisponibles(com.redxela.model.TipoRecurso.MONTACARGAS)
+            + ",\"estacionesEmpaque\":" + gestor.consultarDisponibles(com.redxela.model.TipoRecurso.ESTACION_EMPAQUE)
+            + ",\"areasCarga\":" + gestor.consultarDisponibles(com.redxela.model.TipoRecurso.AREA_CARGA)
+            + ",\"encargadosBodega\":" + gestor.consultarDisponibles(com.redxela.model.TipoRecurso.ENCARGADO_BODEGA)
+            + ",\"estacionesCalidad\":" + gestor.consultarDisponibles(com.redxela.model.TipoRecurso.ESTACION_CONTROL_CALIDAD)
+            + ",\"sistemasEscaneo\":" + gestor.consultarDisponibles(com.redxela.model.TipoRecurso.SISTEMA_ESCANEO)
+            + "}";
+        ctx.contentType("application/json").result(json);
     }
 
     // manejar solicitud del estado del almacen paginado
     private void manejadorAlmacen(Context ctx) {
         // construir JSON con las celdas del almacen
-        StringBuilder json = new StringBuilder();
-        json.append("{");
-        json.append("\"capacidadTotal\":");
-        json.append(almacen.getCapacidadTotal());
-        json.append(",");
-        json.append("\"espaciosOcupados\":");
-        json.append(almacen.getEspaciosOcupados());
-        json.append(",");
-        json.append("\"espaciosDisponibles\":");
-        json.append(almacen.getEspaciosDisponibles());
-        json.append(",");
-        json.append("\"celdas\":[");
-        // obtener todas las celdas del almacen
+        int ocupados = almacen.getEspaciosOcupados();
+        boolean hayOcupacion = false;
+        if (ocupados > 0) {
+            hayOcupacion = true;
+        }
+        String celdas = "";
         for (int p = 0; p < 4; p++) {
             for (int n = 0; n < 3; n++) {
                 for (int e = 0; e < 6; e++) {
-                    json.append("{\"pasillo\":");
-                    json.append(p + 1);
-                    json.append(",\"nivel\":");
-                    json.append(n + 1);
-                    json.append(",\"espacio\":");
-                    json.append(e + 1);
-                    json.append(",\"ocupada\":");
-                    json.append(almacen.getEspaciosOcupados() > 0);
-                    json.append("}");
-                    if (!(p == 3 && n == 2 && e == 5)) {
-                        json.append(",");
+                    String celda = "{\"pasillo\":" + (p + 1)
+                        + ",\"nivel\":" + (n + 1)
+                        + ",\"espacio\":" + (e + 1)
+                        + ",\"ocupada\":" + hayOcupacion
+                        + "}";
+                    if (celdas.equals("")) {
+                        celdas = celda;
+                    } else {
+                        celdas = celdas + "," + celda;
                     }
                 }
             }
         }
-        json.append("]}");
-        ctx.contentType("application/json").result(json.toString());
+        String json = "{\"capacidadTotal\":" + almacen.getCapacidadTotal()
+            + ",\"espaciosOcupados\":" + ocupados
+            + ",\"espaciosDisponibles\":" + almacen.getEspaciosDisponibles()
+            + ",\"celdas\":[" + celdas + "]}";
+        ctx.contentType("application/json").result(json);
     }
 
     // registrar pedido manual recibido por post
