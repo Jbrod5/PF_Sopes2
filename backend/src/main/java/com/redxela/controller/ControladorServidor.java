@@ -18,6 +18,7 @@ import com.redxela.model.NivelServicio;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,12 +48,34 @@ public class ControladorServidor {
         this.almacen = almacen;
         this.simulador = new SimuladorDeadlock(gestor);
         // crear la instancia de javalin en el puerto 7070
+        String rutaEstatica = resolverRutaEstatica();
         this.app = Javalin.create(config -> {
             // configurar archivos estaticos del frontend
-            config.staticFiles.add("/home/jorge/Sopes2/PF_workspace/PF_Sopes2/frontend/dist", Location.EXTERNAL);
+            config.staticFiles.add(rutaEstatica, Location.EXTERNAL);
+            config.spaRoot.addFile("/", rutaEstatica + "/index.html", Location.EXTERNAL);
         }).start(7070);
         // configurar rutas disponibles del servidor
         this.configurarRutas();
+    }
+
+    // resolver ruta del frontend compilado segun directorio de trabajo
+    private String resolverRutaEstatica() {
+        // buscar candidatos relativos sin usar rutas absolutas fijas
+        String[] candidatos = new String[]{
+            "../frontend/dist",
+            "frontend/dist",
+            "PF_Sopes2/frontend/dist"
+        };
+        for (int i = 0; i < candidatos.length; i++) {
+            File carpeta = new File(candidatos[i]);
+            if (carpeta.exists()) {
+                if (carpeta.isDirectory()) {
+                    return carpeta.getAbsolutePath();
+                }
+            }
+        }
+        // usar ruta por defecto cuando no existe ningun candidato
+        return new File("../frontend/dist").getAbsolutePath();
     }
 
     // configurar las rutas disponibles en el servidor javalin
