@@ -75,6 +75,12 @@ export async function obtenerProductos() {
   return res.json();
 }
 
+// obtener estado del almacen paginado
+export async function obtenerAlmacen() {
+  const res = await fetch("http://localhost:7070/api/almacen");
+  return res.json();
+}
+
 // registrar manualmente la llegada de mercaderia
 export async function registrarMercaderia(producto, cantidad) {
   const res = await fetch("http://localhost:7070/api/recepcion", {

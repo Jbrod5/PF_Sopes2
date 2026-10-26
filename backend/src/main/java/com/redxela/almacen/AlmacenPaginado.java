@@ -249,6 +249,35 @@ public class AlmacenPaginado {
     }
 
     /**
+     * Obtener una foto del estado actual de cada celda fisica del almacen.
+     *
+     * @return lista con copias de las ubicaciones y su ocupacion.
+     */
+    public List<UbicacionAlmacen> obtenerEstadoCeldas() {
+        // adquirir el cerrojo para copiar con exclusion mutua
+        this.cerrojoAlmacen.lock();
+        try {
+            List<UbicacionAlmacen> copia = new ArrayList<UbicacionAlmacen>();
+            for (int p = 0; p < this.totalPasillos; p++) {
+                for (int n = 0; n < this.totalNiveles; n++) {
+                    for (int e = 0; e < this.totalEspaciosPorNivel; e++) {
+                        UbicacionAlmacen actual = this.celdas[p][n][e];
+                        UbicacionAlmacen foto = new UbicacionAlmacen(actual.getPasillo(), actual.getNivel(), actual.getEspacio());
+                        if (actual.isOcupada()) {
+                            foto.asignarLote(actual.getIdLoteAsignado(), actual.getIdProductoAsignado());
+                        }
+                        copia.add(foto);
+                    }
+                }
+            }
+            return copia;
+        } finally {
+            // liberar el cerrojo de forma segura
+            this.cerrojoAlmacen.unlock();
+        }
+    }
+
+    /**
      * Imprimir en consola el mapa visual de ocupacion del almacen.
      */
     public void imprimirMapaOcupacion() {

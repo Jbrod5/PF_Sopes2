@@ -183,33 +183,29 @@ public class ControladorServidor {
 
     // manejar solicitud del estado del almacen paginado
     private void manejadorAlmacen(Context ctx) {
-        // construir JSON con las celdas del almacen
-        int ocupados = almacen.getEspaciosOcupados();
-        boolean hayOcupacion = false;
-        if (ocupados > 0) {
-            hayOcupacion = true;
-        }
-        String celdas = "";
-        for (int p = 0; p < 4; p++) {
-            for (int n = 0; n < 3; n++) {
-                for (int e = 0; e < 6; e++) {
-                    String celda = "{\"pasillo\":" + (p + 1)
-                        + ",\"nivel\":" + (n + 1)
-                        + ",\"espacio\":" + (e + 1)
-                        + ",\"ocupada\":" + hayOcupacion
-                        + "}";
-                    if (celdas.equals("")) {
-                        celdas = celda;
-                    } else {
-                        celdas = celdas + "," + celda;
-                    }
-                }
+        // construir JSON con el estado real celda por celda
+        List<com.redxela.almacen.UbicacionAlmacen> celdas = almacen.obtenerEstadoCeldas();
+        String lista = "";
+        for (int i = 0; i < celdas.size(); i++) {
+            com.redxela.almacen.UbicacionAlmacen actual = celdas.get(i);
+            String lote = actual.getIdLoteAsignado();
+            if (lote == null) {
+                lote = "";
             }
+            String elemento = "{\"pasillo\":" + actual.getPasillo()
+                + ",\"nivel\":" + actual.getNivel()
+                + ",\"espacio\":" + actual.getEspacio()
+                + ",\"ocupada\":" + actual.isOcupada()
+                + ",\"lote\":\"" + lote + "\"}";
+            if (i > 0) {
+                lista = lista + ",";
+            }
+            lista = lista + elemento;
         }
         String json = "{\"capacidadTotal\":" + almacen.getCapacidadTotal()
-            + ",\"espaciosOcupados\":" + ocupados
+            + ",\"espaciosOcupados\":" + almacen.getEspaciosOcupados()
             + ",\"espaciosDisponibles\":" + almacen.getEspaciosDisponibles()
-            + ",\"celdas\":[" + celdas + "]}";
+            + ",\"celdas\":[" + lista + "]}";
         ctx.contentType("application/json").result(json);
     }
 
