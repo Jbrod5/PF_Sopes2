@@ -39,6 +39,9 @@ public class MotorPlanificador implements Runnable {
     // controlador de existencias para verificar y descontar stock
     private final ControladorInventario inventario;
 
+    // oyente opcional de eventos para la interfaz en tiempo real
+    private OyenteSimulacion oyente;
+
     // identificadores de pedidos ya descontados de existencias
     private final java.util.Set<String> pedidosDescontados;
 
@@ -98,6 +101,15 @@ public class MotorPlanificador implements Runnable {
     }
 
     /**
+     * Asignar el oyente de eventos del simulador.
+     *
+     * @param oyente oyente a notificar en despacho y completado.
+     */
+    public void setOyente(OyenteSimulacion oyente) {
+        this.oyente = oyente;
+    }
+
+    /**
      * Reanudar el despacho de pedidos.
      */
     public void reanudar() {
@@ -151,6 +163,11 @@ public class MotorPlanificador implements Runnable {
                 }
 
                 hiloPedido.start();
+
+                // notificar a la interfaz que se despacho un pedido
+                if (this.oyente != null) {
+                    this.oyente.alDespacharPedido(pedido);
+                }
 
                 // limpiar referencias de hilos que ya hayan terminado
                 this.limpiarHilosFinalizados();
@@ -225,6 +242,10 @@ public class MotorPlanificador implements Runnable {
                         if (!this.pedidosDescontados.contains(terminado.getId())) {
                             this.descontarStockPedido(terminado);
                             this.pedidosDescontados.add(terminado.getId());
+                        }
+                        // notificar a la interfaz que se completo un pedido
+                        if (this.oyente != null) {
+                            this.oyente.alCompletarPedido(terminado);
                         }
                     } else if (terminado.getEstado() == EstadoPedido.CANCELADO) {
                         // reencolar cancelados con tope de reintentos para no perderlos

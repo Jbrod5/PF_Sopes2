@@ -3,10 +3,14 @@ package com.redxela.controller;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.staticfiles.Location;
+import io.javalin.websocket.WsCloseContext;
+import io.javalin.websocket.WsConnectContext;
 import io.javalin.websocket.WsMessageContext;
+import io.javalin.websocket.WsContext;
 
 import com.redxela.service.ColaPrioridadPedidos;
 import com.redxela.service.MotorPlanificador;
+import com.redxela.service.OyenteSimulacion;
 import com.redxela.service.PoliticaPlanificacion;
 import com.redxela.service.RegistroClientes;
 import com.redxela.service.ServicioRecepcion;
@@ -26,10 +30,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // servidor javalin que expone rutas para el modulo 3 y el sistema completo
-public class ControladorServidor {
+public class ControladorServidor implements OyenteSimulacion {
 
     // instancia del servidor javalin
     private final Javalin app;
@@ -51,6 +57,9 @@ public class ControladorServidor {
 
     // contador secuencial para generar identificadores de pedido en el servidor
     private final AtomicInteger contadorPedidos;
+
+    // sesiones activas del canal de eventos en tiempo real
+    private final Set<WsContext> sesionesWs;
 
     /**
      * Constructor sobrecargado que inicializa el servidor con los servicios existentes.
@@ -80,7 +89,12 @@ public class ControladorServidor {
         this.recepcion = null;
         this.registroClientes = null;
         this.contadorPedidos = new AtomicInteger(1);
+        this.sesionesWs = ConcurrentHashMap.newKeySet();
         this.simulador = new SimuladorDeadlock(gestor);
+        // suscribir el servidor a los eventos del motor para el tablero en vivo
+        if (motor != null) {
+            motor.setOyente(this);
+        }
         // crear la instancia de javalin en el puerto 7070
         String rutaEstatica = resolverRutaEstatica();
         boolean hayFrontend = false;
@@ -153,6 +167,14 @@ public class ControladorServidor {
         this.app.get("/api/clientes", this::manejadorListarClientes);
         this.app.post("/api/clientes", this::manejadorRegistrarCliente);
         this.app.ws("/ws/simulacion", ws -> {
+            ws.onConnect((WsConnectContext ctx) -> {
+                // registrar la nueva sesion del tablero en vivo
+                this.sesionesWs.add(ctx);
+            });
+            ws.onClose((WsCloseContext ctx) -> {
+                // remover la sesion desconectada del tablero en vivo
+                this.sesionesWs.remove(ctx);
+            });
             ws.onMessage((WsMessageContext ctx) -> {
                 // reenviar mensaje de confirmacion al cliente
                 String mensaje = ctx.message();
@@ -515,6 +537,7 @@ public class ControladorServidor {
         Pedido p2 = new Pedido("DL-B", new Cliente(), com.redxela.model.NivelServicio.PRIORITARIO);
         InformacionConflicto conflicto = simulador.forzarDeadlockDeliberado(p1, com.redxela.model.TipoRecurso.MONTACARGAS, com.redxela.model.TipoRecurso.ESTACION_EMPAQUE, p2);
         if (conflicto != null) {
+            this.alCambiarDeadlock();
             ctx.result("Interbloqueo inducido: " + conflicto.getCausaBloqueo());
         } else {
             ctx.result("No se detecto interbloqueo");
@@ -531,6 +554,7 @@ public class ControladorServidor {
 
             boolean resuelto = simulador.resolverConflictoManual(idGanador);
             if (resuelto) {
+                this.alCambiarDeadlock();
                 ctx.contentType("application/json").result("{\"mensaje\":\"Conflicto resuelto manualmente\",\"id\":\"" + idGanador + "\"}");
             } else {
                 ctx.contentType("application/json").result("{\"mensaje\":\"No hay conflicto activo para resolver\"}");
@@ -538,6 +562,50 @@ public class ControladorServidor {
         } catch (Exception e) {
             ctx.status(400).contentType("application/json").result("{\"error\":\"Error procesando solicitud\"}");
         }
+    }
+
+    // difundir un evento a todas las sesiones del tablero en vivo
+    private void difundirEvento(String tipo, String datosJson) {
+        if (this.sesionesWs.isEmpty()) {
+            return;
+        }
+        // construir el mensaje con formato tipo y datos
+        String mensaje = "{\"tipo\":\"" + tipo + "\",\"datos\":" + datosJson + "}";
+        for (WsContext sesion : this.sesionesWs) {
+            try {
+                sesion.send(mensaje);
+            } catch (Exception e) {
+                System.err.println("Error difundiendo evento WebSocket: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Notificar que un pedido fue despachado a procesamiento.
+     *
+     * @param pedido pedido despachado.
+     */
+    @Override
+    public void alDespacharPedido(Pedido pedido) {
+        this.difundirEvento("tablero", "{\"evento\":\"despacho\",\"id\":\"" + pedido.getId() + "\"}");
+    }
+
+    /**
+     * Notificar que un pedido completo su procesamiento.
+     *
+     * @param pedido pedido completado.
+     */
+    @Override
+    public void alCompletarPedido(Pedido pedido) {
+        this.difundirEvento("tablero", "{\"evento\":\"completado\",\"id\":\"" + pedido.getId() + "\"}");
+    }
+
+    /**
+     * Notificar que cambio el estado del conflicto de interbloqueo.
+     */
+    @Override
+    public void alCambiarDeadlock() {
+        this.difundirEvento("deadlock", "{\"cambio\":true}");
     }
 
     /**

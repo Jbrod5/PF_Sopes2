@@ -68,6 +68,8 @@
         } else if (datos.tipo === "deadlock") {
           alertaDeadlock.set(datos.datos);
         }
+        // refrescar el tablero ante cualquier evento del servidor
+        actualizarTablero();
       } catch (e) {
         console.error("Error procesando mensaje WebSocket:", e);
       }
