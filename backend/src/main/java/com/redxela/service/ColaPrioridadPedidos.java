@@ -240,4 +240,57 @@ public class ColaPrioridadPedidos {
             this.cerrojo.unlock();
         }
     }
+
+    /**
+     * Verificar si ya existe un pedido en espera con el identificador indicado.
+     *
+     * @param idPedido identificador a buscar.
+     * @return verdadero si ya existe en la cola.
+     */
+    public boolean existePedidoConId(String idPedido) {
+        if (idPedido == null) {
+            return false;
+        }
+        // adquirir el cerrojo para buscar con exclusion mutua
+        this.cerrojo.lock();
+        try {
+            for (int i = 0; i < this.listaPedidos.size(); i++) {
+                Pedido actual = this.listaPedidos.get(i);
+                if (actual.getId().equals(idPedido)) {
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            // liberar el cerrojo de forma segura
+            this.cerrojo.unlock();
+        }
+    }
+
+    /**
+     * Remover de la cola el primer pedido que cumpla la condicion indicada.
+     *
+     * @param idPedido identificador del pedido a remover.
+     * @return pedido removido o null si no se encontro.
+     */
+    public Pedido removerPedidoPorId(String idPedido) {
+        if (idPedido == null) {
+            return null;
+        }
+        // adquirir el cerrojo para remover con exclusion mutua
+        this.cerrojo.lock();
+        try {
+            for (int i = 0; i < this.listaPedidos.size(); i++) {
+                Pedido actual = this.listaPedidos.get(i);
+                if (actual.getId().equals(idPedido)) {
+                    this.listaPedidos.remove(i);
+                    return actual;
+                }
+            }
+            return null;
+        } finally {
+            // liberar el cerrojo de forma segura
+            this.cerrojo.unlock();
+        }
+    }
 }

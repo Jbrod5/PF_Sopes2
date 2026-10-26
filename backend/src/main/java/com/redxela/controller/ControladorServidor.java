@@ -8,6 +8,7 @@ import io.javalin.websocket.WsMessageContext;
 import com.redxela.service.ColaPrioridadPedidos;
 import com.redxela.service.MotorPlanificador;
 import com.redxela.service.PoliticaPlanificacion;
+import com.redxela.service.RegistroClientes;
 import com.redxela.service.ServicioRecepcion;
 import com.redxela.concurrencia.GestorRecursos;
 import com.redxela.concurrencia.ProcesoSimulacionPedido;
@@ -15,6 +16,7 @@ import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
 import com.redxela.concurrencia.deadlock.InformacionConflicto;
 import com.redxela.almacen.AlmacenPaginado;
 import com.redxela.model.Pedido;
+import com.redxela.model.ItemPedido;
 import com.redxela.model.Producto;
 import com.redxela.model.TipoRecurso;
 import com.redxela.model.Cliente;
@@ -24,6 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 // servidor javalin que expone rutas para el modulo 3 y el sistema completo
 public class ControladorServidor {
@@ -42,6 +45,12 @@ public class ControladorServidor {
 
     // referencia opcional a recepcion para el ingreso manual de mercaderia
     private ServicioRecepcion recepcion;
+
+    // referencia opcional al registro de cuentas de clientes
+    private RegistroClientes registroClientes;
+
+    // contador secuencial para generar identificadores de pedido en el servidor
+    private final AtomicInteger contadorPedidos;
 
     /**
      * Constructor sobrecargado que inicializa el servidor con los servicios existentes.
@@ -69,6 +78,8 @@ public class ControladorServidor {
         this.almacen = almacen;
         this.motor = motor;
         this.recepcion = null;
+        this.registroClientes = null;
+        this.contadorPedidos = new AtomicInteger(1);
         this.simulador = new SimuladorDeadlock(gestor);
         // crear la instancia de javalin en el puerto 7070
         String rutaEstatica = resolverRutaEstatica();
@@ -139,6 +150,8 @@ public class ControladorServidor {
         this.app.post("/api/politica", this::manejadorCambiarPolitica);
         this.app.post("/api/deadlock/inducir", this::manejadorInducirDeadlock);
         this.app.post("/api/deadlock/resolver", this::manejadorResolverDeadlock);
+        this.app.get("/api/clientes", this::manejadorListarClientes);
+        this.app.post("/api/clientes", this::manejadorRegistrarCliente);
         this.app.ws("/ws/simulacion", ws -> {
             ws.onMessage((WsMessageContext ctx) -> {
                 // reenviar mensaje de confirmacion al cliente
@@ -380,10 +393,22 @@ public class ControladorServidor {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode cuerpo = mapper.readTree(ctx.body());
 
-            String id = cuerpo.has("id") ? cuerpo.get("id").asText() : "MAN-001";
-            String nombreCliente = cuerpo.has("cliente") ? cuerpo.get("cliente").asText() : "Cliente Generico";
-            String nivelStr = cuerpo.has("nivel") ? cuerpo.get("nivel").asText() : "ESTANDAR";
+            // resolver identificador unico generando uno en el servidor si falta o se repite
+            String id = "";
+            if (cuerpo.has("id")) {
+                id = cuerpo.get("id").asText().trim();
+            }
+            if (id.equals("")) {
+                id = "WEB-" + this.contadorPedidos.getAndIncrement();
+            } else if (this.cola.existePedidoConId(id)) {
+                id = "WEB-" + this.contadorPedidos.getAndIncrement();
+            }
 
+            // resolver nivel de servicio con valor por defecto
+            String nivelStr = "ESTANDAR";
+            if (cuerpo.has("nivel")) {
+                nivelStr = cuerpo.get("nivel").asText();
+            }
             NivelServicio nivel = NivelServicio.ESTANDAR;
             if (nivelStr.equals("EXPRES")) {
                 nivel = NivelServicio.EXPRES;
@@ -395,8 +420,68 @@ public class ControladorServidor {
                 nivel = NivelServicio.PROGRAMADO;
             }
 
-            Cliente cliente = new Cliente(id + "-CLI", nombreCliente, "contacto@generico.com");
+            // resolver cliente desde el registro cuando se indica identificador
+            Cliente cliente = null;
+            if (cuerpo.has("idCliente")) {
+                String idCliente = cuerpo.get("idCliente").asText();
+                if (this.registroClientes == null) {
+                    ctx.status(503).contentType("application/json").result("{\"error\":\"Registro de clientes no disponible\"}");
+                    return;
+                }
+                cliente = this.registroClientes.obtenerCliente(idCliente);
+                if (cliente == null) {
+                    ctx.status(400).contentType("application/json").result("{\"error\":\"Cliente no registrado\"}");
+                    return;
+                }
+            } else {
+                // mantener compatibilidad creando cliente sintetico con el nombre recibido
+                String nombreCliente = "Cliente Generico";
+                if (cuerpo.has("cliente")) {
+                    nombreCliente = cuerpo.get("cliente").asText();
+                }
+                cliente = new Cliente(id + "-CLI", nombreCliente, "contacto@generico.com");
+            }
+
+            // crear el pedido base con cliente y nivel resueltos
             Pedido nuevo = new Pedido(id, cliente, nivel);
+
+            // agregar lineas de productos cuando se incluyen en la solicitud
+            if (cuerpo.has("items")) {
+                if (this.recepcion == null) {
+                    ctx.status(503).contentType("application/json").result("{\"error\":\"Recepcion no disponible para validar productos\"}");
+                    return;
+                }
+                List<Producto> catalogo = this.recepcion.obtenerCatalogo();
+                JsonNode items = cuerpo.get("items");
+                for (int i = 0; i < items.size(); i++) {
+                    JsonNode linea = items.get(i);
+                    String idProducto = "";
+                    if (linea.has("producto")) {
+                        idProducto = linea.get("producto").asText();
+                    }
+                    int cantidad = 0;
+                    if (linea.has("cantidad")) {
+                        cantidad = linea.get("cantidad").asInt(0);
+                    }
+                    if (cantidad <= 0) {
+                        ctx.status(400).contentType("application/json").result("{\"error\":\"Cantidad invalida en la linea " + (i + 1) + "\"}");
+                        return;
+                    }
+                    Producto encontrado = null;
+                    for (int j = 0; j < catalogo.size(); j++) {
+                        if (catalogo.get(j).getId().equals(idProducto)) {
+                            encontrado = catalogo.get(j);
+                        }
+                    }
+                    if (encontrado == null) {
+                        ctx.status(400).contentType("application/json").result("{\"error\":\"Producto desconocido: " + idProducto + "\"}");
+                        return;
+                    }
+                    nuevo.agregarItem(new ItemPedido(encontrado, cantidad));
+                }
+            }
+
+            // encolar el pedido construido
             cola.encolarPedido(nuevo);
 
             ctx.contentType("application/json").result("{\"mensaje\":\"Pedido registrado exitosamente\",\"id\":\"" + id + "\"}");
@@ -466,6 +551,79 @@ public class ControladorServidor {
      */
     public void setServicioRecepcion(ServicioRecepcion recepcion) {
         this.recepcion = recepcion;
+    }
+
+    /**
+     * Asignar el registro de cuentas de clientes para los pedidos manuales.
+     *
+     * @param registroClientes registro concurrente de clientes.
+     */
+    public void setRegistroClientes(RegistroClientes registroClientes) {
+        this.registroClientes = registroClientes;
+    }
+
+    // manejar solicitud de listado de clientes registrados
+    private void manejadorListarClientes(Context ctx) {
+        if (this.registroClientes == null) {
+            ctx.status(503).contentType("application/json").result("{\"error\":\"Registro de clientes no disponible\"}");
+            return;
+        }
+        // construir arreglo con las cuentas registradas
+        List<Cliente> clientes = this.registroClientes.listarClientes();
+        String elementos = "";
+        for (int i = 0; i < clientes.size(); i++) {
+            Cliente actual = clientes.get(i);
+            String elemento = "{\"id\":\"" + actual.getId() + "\""
+                + ",\"nombre\":\"" + actual.getNombre() + "\""
+                + ",\"correo\":\"" + actual.getCorreo() + "\"}";
+            if (i > 0) {
+                elementos = elementos + ",";
+            }
+            elementos = elementos + elemento;
+        }
+        ctx.contentType("application/json").result("[" + elementos + "]");
+    }
+
+    // registrar manualmente una cuenta nueva de cliente
+    private void manejadorRegistrarCliente(Context ctx) {
+        if (this.registroClientes == null) {
+            ctx.status(503).contentType("application/json").result("{\"error\":\"Registro de clientes no disponible\"}");
+            return;
+        }
+        try {
+            // parsear cuerpo JSON de la solicitud
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode cuerpo = mapper.readTree(ctx.body());
+            String id = "";
+            if (cuerpo.has("id")) {
+                id = cuerpo.get("id").asText().trim();
+            }
+            String nombre = "";
+            if (cuerpo.has("nombre")) {
+                nombre = cuerpo.get("nombre").asText().trim();
+            }
+            String correo = "";
+            if (cuerpo.has("correo")) {
+                correo = cuerpo.get("correo").asText().trim();
+            }
+            if (id.equals("")) {
+                ctx.status(400).contentType("application/json").result("{\"error\":\"Identificador de cliente requerido\"}");
+                return;
+            }
+            if (nombre.equals("")) {
+                ctx.status(400).contentType("application/json").result("{\"error\":\"Nombre de cliente requerido\"}");
+                return;
+            }
+            Cliente nuevo = new Cliente(id, nombre, correo);
+            boolean registrado = this.registroClientes.registrarCliente(nuevo);
+            if (!registrado) {
+                ctx.status(400).contentType("application/json").result("{\"error\":\"Identificador de cliente duplicado\"}");
+                return;
+            }
+            ctx.contentType("application/json").result("{\"mensaje\":\"Cliente registrado exitosamente\",\"id\":\"" + id + "\"}");
+        } catch (Exception e) {
+            ctx.status(400).contentType("application/json").result("{\"error\":\"Error procesando solicitud\"}");
+        }
     }
 
     /**

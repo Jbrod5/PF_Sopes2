@@ -84,3 +84,19 @@ export async function registrarMercaderia(producto, cantidad) {
   });
   return res.json();
 }
+
+// obtener cuentas de clientes registrados
+export async function obtenerClientes() {
+  const res = await fetch("http://localhost:7070/api/clientes");
+  return res.json();
+}
+
+// registrar una cuenta nueva de cliente
+export async function registrarCliente(datos) {
+  const res = await fetch("http://localhost:7070/api/clientes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  return res.json();
+}

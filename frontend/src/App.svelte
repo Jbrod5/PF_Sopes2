@@ -7,6 +7,7 @@
   import PanelProcesando from "./components/PanelProcesando.svelte";
   import PanelCola from "./components/PanelCola.svelte";
   import PanelMercaderia from "./components/PanelMercaderia.svelte";
+  import PanelClientes from "./components/PanelClientes.svelte";
   import MapaAlmacen from "./components/MapaAlmacen.svelte";
   import { obtenerRecursos, obtenerEstadisticas, obtenerProcesando, obtenerCola } from "./services/servicioApi.js";
   import { conectarWebSocket } from "./services/servicioWebSocket.js";
@@ -111,6 +112,11 @@
     </div>
     <div class="col-md-6">
       <PanelMercaderia />
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-12">
+      <PanelClientes />
     </div>
   </div>
 </div>

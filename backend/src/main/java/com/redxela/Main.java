@@ -17,6 +17,7 @@ import com.redxela.service.ControladorInventario;
 import com.redxela.service.GeneradorPedidosAutomatico;
 import com.redxela.service.MotorPlanificador;
 import com.redxela.service.PoliticaPlanificacion;
+import com.redxela.service.RegistroClientes;
 import com.redxela.service.ServicioInventario;
 import com.redxela.service.ServicioRecepcion;
 import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
@@ -41,6 +42,12 @@ public class Main {
         // crear catalogos base de clientes y productos
         List<Cliente> catalogoClientes = crearCatalogoClientes(formato);
         List<Producto> catalogoProductos = crearCatalogoProductos(formato);
+
+        // crear registro de cuentas con los clientes del catalogo
+        RegistroClientes registroClientes = new RegistroClientes();
+        for (int i = 0; i < catalogoClientes.size(); i++) {
+            registroClientes.registrarCliente(catalogoClientes.get(i));
+        }
 
         // ejecutar etapa de cola con cambio dinamico de politicas
         ColaPrioridadPedidos colaPedidos = ejecutarEtapaCola(formato, catalogoClientes, catalogoProductos);
@@ -73,7 +80,7 @@ public class Main {
         hiloGeneradorVivo.start();
 
         // iniciar servidor javalin en el puerto 7070 para la conexion con el frontend
-        iniciarServidor(colaPedidos, gestorRecursos, motorVivo, catalogoProductos);
+        iniciarServidor(colaPedidos, gestorRecursos, motorVivo, catalogoProductos, registroClientes);
 
         formato.imprimirEncabezado("FIN DE LA EJECUCION DEL MODULO 2");
     }
@@ -279,7 +286,7 @@ public class Main {
     }
 
     // iniciar servidor javalin para la conexion con el frontend
-    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos) {
+    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos, RegistroClientes registro) {
         AlmacenPaginado almacenServidor = new AlmacenPaginado(4, 3, 6);
         ControladorServidor servidor = new ControladorServidor(cola, gestor, almacenServidor, motor);
         BufferRecepcion bufferVivo = new BufferRecepcion(10);
@@ -289,6 +296,7 @@ public class Main {
         Thread hiloInventario = new Thread(inventarioServicio, "Hilo-Inventario-Vivo");
         hiloInventario.start();
         servidor.setServicioRecepcion(recepcionViva);
+        servidor.setRegistroClientes(registro);
         System.out.println("Servidor Javalin iniciado en el puerto 7070");
     }
 }
