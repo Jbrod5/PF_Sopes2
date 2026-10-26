@@ -11,6 +11,9 @@ import java.util.List;
 // entidad principal que representa un pedido de cliente en el centro de distribucion
 public class Pedido {
 
+    // cantidad maxima de reintentos cuando un pedido es cancelado
+    public static final int MAX_REINTENTOS = 3;
+
     // identificador unico del pedido
     private String id;
 
@@ -32,6 +35,9 @@ public class Pedido {
     // marca de tiempo en milisegundos de la creacion del pedido
     private long tiempoCreacionMs;
 
+    // conteo de reintentos tras cancelaciones
+    private int reintentos;
+
     /**
      * Constructor por defecto del pedido.
      */
@@ -44,6 +50,7 @@ public class Pedido {
         this.cantidadTotal = 0;
         this.estado = EstadoPedido.RECIBIDO;
         this.tiempoCreacionMs = System.currentTimeMillis();
+        this.reintentos = 0;
     }
 
     /**
@@ -61,6 +68,7 @@ public class Pedido {
         this.cantidadTotal = 0;
         this.estado = EstadoPedido.RECIBIDO;
         this.tiempoCreacionMs = System.currentTimeMillis();
+        this.reintentos = 0;
     }
 
     /**
@@ -78,6 +86,7 @@ public class Pedido {
         this.listaItems = new ArrayList<ItemPedido>();
         this.estado = EstadoPedido.RECIBIDO;
         this.tiempoCreacionMs = System.currentTimeMillis();
+        this.reintentos = 0;
         // agregar los items pasados en la lista
         if (listaItems != null) {
             for (int i = 0; i < listaItems.size(); i++) {
@@ -280,6 +289,22 @@ public class Pedido {
      */
     public void setTiempoCreacionMs(long tiempoCreacionMs) {
         this.tiempoCreacionMs = tiempoCreacionMs;
+    }
+
+    /**
+     * Obtener la cantidad de reintentos acumulados por cancelaciones.
+     *
+     * @return numero de reintentos.
+     */
+    public int getReintentos() {
+        return this.reintentos;
+    }
+
+    /**
+     * Incrementar el conteo de reintentos tras una cancelacion.
+     */
+    public void registrarReintento() {
+        this.reintentos = this.reintentos + 1;
     }
 
     /**

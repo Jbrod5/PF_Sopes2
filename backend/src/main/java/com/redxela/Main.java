@@ -71,8 +71,12 @@ public class Main {
         // demostrar deadlock y resolucion manual
         ejecutarEtapaDeadlock(formato, colaPedidos, gestorRecursos, catalogoClientes);
 
+        // preparar almacen e inventario vivos para la interfaz
+        AlmacenPaginado almacenVivo = new AlmacenPaginado(4, 3, 6);
+        ControladorInventario inventarioVivo = new ControladorInventario(almacenVivo);
+
         // iniciar despacho continuo para atender la interfaz en vivo
-        MotorPlanificador motorVivo = new MotorPlanificador(colaPedidos, gestorRecursos);
+        MotorPlanificador motorVivo = new MotorPlanificador(colaPedidos, gestorRecursos, inventarioVivo);
         Thread hiloMotorVivo = new Thread(motorVivo, "Hilo-Planificador-Vivo");
         hiloMotorVivo.start();
         GeneradorPedidosAutomatico generadorVivo = new GeneradorPedidosAutomatico(colaPedidos, catalogoClientes, catalogoProductos, 2000L);
@@ -80,7 +84,7 @@ public class Main {
         hiloGeneradorVivo.start();
 
         // iniciar servidor javalin en el puerto 7070 para la conexion con el frontend
-        iniciarServidor(colaPedidos, gestorRecursos, motorVivo, catalogoProductos, registroClientes);
+        iniciarServidor(colaPedidos, gestorRecursos, motorVivo, catalogoProductos, registroClientes, almacenVivo, inventarioVivo);
 
         formato.imprimirEncabezado("FIN DE LA EJECUCION DEL MODULO 2");
     }
@@ -286,11 +290,9 @@ public class Main {
     }
 
     // iniciar servidor javalin para la conexion con el frontend
-    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos, RegistroClientes registro) {
-        AlmacenPaginado almacenServidor = new AlmacenPaginado(4, 3, 6);
+    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos, RegistroClientes registro, AlmacenPaginado almacenServidor, ControladorInventario inventarioVivo) {
         ControladorServidor servidor = new ControladorServidor(cola, gestor, almacenServidor, motor);
         BufferRecepcion bufferVivo = new BufferRecepcion(10);
-        ControladorInventario inventarioVivo = new ControladorInventario(almacenServidor);
         ServicioRecepcion recepcionViva = new ServicioRecepcion(bufferVivo, productos);
         ServicioInventario inventarioServicio = new ServicioInventario(bufferVivo, inventarioVivo, 300L);
         Thread hiloInventario = new Thread(inventarioServicio, "Hilo-Inventario-Vivo");
