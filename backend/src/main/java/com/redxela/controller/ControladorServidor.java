@@ -72,11 +72,22 @@ public class ControladorServidor {
         this.simulador = new SimuladorDeadlock(gestor);
         // crear la instancia de javalin en el puerto 7070
         String rutaEstatica = resolverRutaEstatica();
+        boolean hayFrontend = false;
+        if (rutaEstatica != null) {
+            hayFrontend = true;
+        }
+        final boolean servirFrontend = hayFrontend;
+        final String rutaFinal = rutaEstatica;
         this.app = Javalin.create(config -> {
-            // configurar archivos estaticos del frontend
-            config.staticFiles.add(rutaEstatica, Location.EXTERNAL);
-            config.spaRoot.addFile("/", rutaEstatica + "/index.html", Location.EXTERNAL);
+            // configurar archivos estaticos solo si la carpeta compilada existe
+            if (servirFrontend) {
+                config.staticFiles.add(rutaFinal, Location.EXTERNAL);
+                config.spaRoot.addFile("/", rutaFinal + "/index.html", Location.EXTERNAL);
+            }
         }).start(7070);
+        if (!servirFrontend) {
+            System.err.println("[SERVIDOR] Advertencia: no se encontro frontend/dist, solo se servira la API REST");
+        }
         // configurar rutas disponibles del servidor
         this.configurarRutas();
     }
@@ -97,8 +108,18 @@ public class ControladorServidor {
                 }
             }
         }
-        // usar ruta por defecto cuando no existe ningun candidato
-        return new File("../frontend/dist").getAbsolutePath();
+        // permitir ruta personalizada por variable de entorno
+        String rutaEntorno = System.getenv("REDXELA_FRONTEND_DIST");
+        if (rutaEntorno != null) {
+            File carpetaEntorno = new File(rutaEntorno);
+            if (carpetaEntorno.exists()) {
+                if (carpetaEntorno.isDirectory()) {
+                    return carpetaEntorno.getAbsolutePath();
+                }
+            }
+        }
+        // retornar nulo cuando no existe ningun candidato
+        return null;
     }
 
     // configurar las rutas disponibles en el servidor javalin

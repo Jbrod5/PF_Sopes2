@@ -1,0 +1,15 @@
+# compilados de java
+target/
+*.class
+
+# dependencias de node
+node_modules/
+
+# compilado del frontend servido por javalin
+frontend/dist/
+
+# archivos de IDE y sistema
+.idea/
+.vscode/
+*.iml
+.DS_Store
