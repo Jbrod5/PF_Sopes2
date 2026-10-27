@@ -13,3 +13,4 @@ frontend/dist/
 .vscode/
 *.iml
 .DS_Store
+backend/dependency-reduced-pom.xml
