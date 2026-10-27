@@ -25,6 +25,7 @@ import com.redxela.model.Producto;
 import com.redxela.model.TipoRecurso;
 import com.redxela.model.Cliente;
 import com.redxela.model.NivelServicio;
+import com.redxela.util.RegistroEventos;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -54,6 +55,9 @@ public class ControladorServidor implements OyenteSimulacion {
 
     // referencia opcional al registro de cuentas de clientes
     private RegistroClientes registroClientes;
+
+    // referencia opcional a la bitacora de eventos de la simulacion
+    private RegistroEventos registroEventos;
 
     // contador secuencial para generar identificadores de pedido en el servidor
     private final AtomicInteger contadorPedidos;
@@ -88,6 +92,7 @@ public class ControladorServidor implements OyenteSimulacion {
         this.motor = motor;
         this.recepcion = null;
         this.registroClientes = null;
+        this.registroEventos = null;
         this.contadorPedidos = new AtomicInteger(1);
         this.sesionesWs = ConcurrentHashMap.newKeySet();
         this.simulador = new SimuladorDeadlock(gestor);
@@ -95,7 +100,21 @@ public class ControladorServidor implements OyenteSimulacion {
         if (motor != null) {
             motor.setOyente(this);
         }
-        // crear la instancia de javalin en el puerto 7070
+        // resolver puerto de escucha con valor por defecto
+        int puerto = 7070;
+        String puertoTexto = System.getenv("REDXELA_PUERTO");
+        if (puertoTexto != null) {
+            try {
+                int propuesto = Integer.parseInt(puertoTexto.trim());
+                if (propuesto > 0) {
+                    puerto = propuesto;
+                }
+            } catch (NumberFormatException excepcion) {
+                System.err.println("[SERVIDOR] Puerto invalido en REDXELA_PUERTO, usando 7070");
+            }
+        }
+        final int puertoFinal = puerto;
+        // crear la instancia de javalin en el puerto configurado
         java.net.URL recursoEmpaquetado = ControladorServidor.class.getResource("/public/index.html");
         boolean enJar = false;
         if (recursoEmpaquetado != null) {
@@ -124,7 +143,7 @@ public class ControladorServidor implements OyenteSimulacion {
                 config.staticFiles.add(rutaFinal, Location.EXTERNAL);
                 config.spaRoot.addFile("/", rutaFinal + "/index.html", Location.EXTERNAL);
             }
-        }).start(7070);
+        }).start(puertoFinal);
         if (!servirFinal) {
             System.err.println("[SERVIDOR] Advertencia: no se encontro frontend/dist, solo se servira la API REST");
         }
@@ -181,6 +200,7 @@ public class ControladorServidor implements OyenteSimulacion {
         this.app.post("/api/deadlock/resolver", this::manejadorResolverDeadlock);
         this.app.get("/api/clientes", this::manejadorListarClientes);
         this.app.post("/api/clientes", this::manejadorRegistrarCliente);
+        this.app.get("/api/bitacora", this::manejadorBitacora);
         this.app.ws("/ws/simulacion", ws -> {
             ws.onConnect((WsConnectContext ctx) -> {
                 // registrar la nueva sesion del tablero en vivo
@@ -639,6 +659,35 @@ public class ControladorServidor implements OyenteSimulacion {
      */
     public void setRegistroClientes(RegistroClientes registroClientes) {
         this.registroClientes = registroClientes;
+    }
+
+    /**
+     * Asignar la bitacora de eventos visible en la interfaz.
+     *
+     * @param registroEventos registro concurrente de eventos.
+     */
+    public void setRegistroEventos(RegistroEventos registroEventos) {
+        this.registroEventos = registroEventos;
+    }
+
+    // manejar solicitud de los ultimos eventos de la simulacion
+    private void manejadorBitacora(Context ctx) {
+        if (this.registroEventos == null) {
+            ctx.contentType("application/json").result("{\"eventos\":[],\"cantidad\":0}");
+            return;
+        }
+        // construir arreglo con los ultimos doscientos eventos
+        List<String> eventos = this.registroEventos.obtenerUltimos(200);
+        String lista = "";
+        for (int i = 0; i < eventos.size(); i++) {
+            String evento = eventos.get(i).replace("\\", "\\\\").replace("\"", "'");
+            if (i > 0) {
+                lista = lista + ",";
+            }
+            lista = lista + "\"" + evento + "\"";
+        }
+        String respuesta = "{\"eventos\":[" + lista + "],\"cantidad\":" + this.registroEventos.getCantidad() + "}";
+        ctx.contentType("application/json").result(respuesta);
     }
 
     // manejar solicitud de listado de clientes registrados

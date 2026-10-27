@@ -81,6 +81,12 @@ export async function obtenerAlmacen() {
   return res.json();
 }
 
+// obtener bitacora de eventos de la simulacion
+export async function obtenerBitacora() {
+  const res = await fetch("http://localhost:7070/api/bitacora");
+  return res.json();
+}
+
 // registrar manualmente la llegada de mercaderia
 export async function registrarMercaderia(producto, cantidad) {
   const res = await fetch("http://localhost:7070/api/recepcion", {

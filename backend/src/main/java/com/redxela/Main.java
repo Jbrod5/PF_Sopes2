@@ -23,6 +23,7 @@ import com.redxela.service.ServicioRecepcion;
 import com.redxela.concurrencia.deadlock.SimuladorDeadlock;
 import com.redxela.concurrencia.deadlock.InformacionConflicto;
 import com.redxela.util.ConsolaFormato;
+import com.redxela.util.RegistroEventos;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +40,10 @@ public class Main {
         ConsolaFormato formato = new ConsolaFormato();
         formato.imprimirEncabezado("SIMULACION DE CENTRO DE DISTRIBUCION REDXELA - MODULO 2");
 
+        // crear bitacora de eventos visible en la interfaz
+        RegistroEventos bitacora = new RegistroEventos();
+        formato.setRegistroEventos(bitacora);
+
         // crear catalogos base de clientes y productos
         List<Cliente> catalogoClientes = crearCatalogoClientes(formato);
         List<Producto> catalogoProductos = crearCatalogoProductos(formato);
@@ -52,18 +57,28 @@ public class Main {
         // ejecutar etapa de cola con cambio dinamico de politicas
         ColaPrioridadPedidos colaPedidos = ejecutarEtapaCola(formato, catalogoClientes, catalogoProductos);
 
-        // crear almacen paginado y controlador de existencias
-        AlmacenPaginado almacen = new AlmacenPaginado(4, 3, 6);
-        ControladorInventario controladorInventario = new ControladorInventario(almacen);
+        // crear almacen paginado y controlador de existencias compartidos con el servidor
+        AlmacenPaginado almacenCompartido = new AlmacenPaginado(4, 3, 6);
+        ControladorInventario inventarioCompartido = new ControladorInventario(almacenCompartido);
 
-        // ejecutar comunicacion entre recepcion e inventario
-        ejecutarEtapaBuffer(formato, catalogoProductos, controladorInventario);
+        // crear gestor de recursos compartido
+        GestorRecursos gestorRecursos = new GestorRecursos();
+
+        // crear motor en vivo con validacion de stock aun sin arrancar
+        MotorPlanificador motorVivo = new MotorPlanificador(colaPedidos, gestorRecursos, inventarioCompartido);
+
+        // iniciar servidor javalin primero para observar las etapas en la interfaz
+        formato.imprimirInfo("Iniciando servidor javalin para observar las etapas en vivo");
+        iniciarServidor(colaPedidos, gestorRecursos, motorVivo, catalogoProductos, registroClientes, almacenCompartido, inventarioCompartido, bitacora);
+
+        // ejecutar comunicacion entre recepcion e inventario sobre las instancias vivas
+        ejecutarEtapaBuffer(formato, catalogoProductos, inventarioCompartido);
 
         // mostrar asignacion no contigua del almacen
-        ejecutarEtapaAlmacen(formato, almacen);
+        ejecutarEtapaAlmacen(formato, almacenCompartido);
 
         // despachar pedidos con motor y generador concurrente
-        GestorRecursos gestorRecursos = ejecutarEtapaMotor(formato, colaPedidos, catalogoClientes, catalogoProductos);
+        ejecutarEtapaMotor(formato, colaPedidos, catalogoClientes, catalogoProductos, gestorRecursos);
 
         // verificar restauracion de semaforos tras la ejecucion
         verificarIntegridadRecursos(formato, gestorRecursos);
@@ -71,22 +86,15 @@ public class Main {
         // demostrar deadlock y resolucion manual
         ejecutarEtapaDeadlock(formato, colaPedidos, gestorRecursos, catalogoClientes);
 
-        // preparar almacen e inventario vivos para la interfaz
-        AlmacenPaginado almacenVivo = new AlmacenPaginado(4, 3, 6);
-        ControladorInventario inventarioVivo = new ControladorInventario(almacenVivo);
-
         // iniciar despacho continuo para atender la interfaz en vivo
-        MotorPlanificador motorVivo = new MotorPlanificador(colaPedidos, gestorRecursos, inventarioVivo);
+        formato.imprimirInfo("Iniciando despacho continuo del sistema en vivo");
         Thread hiloMotorVivo = new Thread(motorVivo, "Hilo-Planificador-Vivo");
         hiloMotorVivo.start();
         GeneradorPedidosAutomatico generadorVivo = new GeneradorPedidosAutomatico(colaPedidos, catalogoClientes, catalogoProductos, 2000L);
         Thread hiloGeneradorVivo = new Thread(generadorVivo, "Hilo-Generador-Vivo");
         hiloGeneradorVivo.start();
 
-        // iniciar servidor javalin en el puerto 7070 para la conexion con el frontend
-        iniciarServidor(colaPedidos, gestorRecursos, motorVivo, catalogoProductos, registroClientes, almacenVivo, inventarioVivo);
-
-        formato.imprimirEncabezado("FIN DE LA EJECUCION DEL MODULO 2");
+        formato.imprimirEncabezado("SISTEMA EN VIVO - OBSERVE LAS ETAPAS EN LA INTERFAZ");
     }
 
     // crear catalogo base con los tres clientes de prueba
@@ -198,10 +206,9 @@ public class Main {
     }
 
     // despachar pedidos con motor planificador y generador automatico
-    private static GestorRecursos ejecutarEtapaMotor(ConsolaFormato formato, ColaPrioridadPedidos cola, List<Cliente> clientes, List<Producto> productos) {
+    private static void ejecutarEtapaMotor(ConsolaFormato formato, ColaPrioridadPedidos cola, List<Cliente> clientes, List<Producto> productos, GestorRecursos gestorRecursos) {
         formato.imprimirSeparador();
         formato.imprimirInfo("ETAPA 4: Motor planificador despachando pedidos con hilos concurrentes");
-        GestorRecursos gestorRecursos = new GestorRecursos();
         gestorRecursos.imprimirEstadoRecursos();
         MotorPlanificador motor = new MotorPlanificador(cola, gestorRecursos);
         Thread hiloMotor = new Thread(motor, "Hilo-Planificador");
@@ -237,7 +244,6 @@ public class Main {
         } catch (InterruptedException excepcion) {
             Thread.currentThread().interrupt();
         }
-        return gestorRecursos;
     }
 
     // verificar restauracion completa de los semaforos
@@ -290,7 +296,7 @@ public class Main {
     }
 
     // iniciar servidor javalin para la conexion con el frontend
-    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos, RegistroClientes registro, AlmacenPaginado almacenServidor, ControladorInventario inventarioVivo) {
+    private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos, RegistroClientes registro, AlmacenPaginado almacenServidor, ControladorInventario inventarioVivo, RegistroEventos bitacora) {
         ControladorServidor servidor = new ControladorServidor(cola, gestor, almacenServidor, motor);
         BufferRecepcion bufferVivo = new BufferRecepcion(10);
         ServicioRecepcion recepcionViva = new ServicioRecepcion(bufferVivo, productos);
@@ -299,6 +305,7 @@ public class Main {
         hiloInventario.start();
         servidor.setServicioRecepcion(recepcionViva);
         servidor.setRegistroClientes(registro);
-        System.out.println("Servidor Javalin iniciado en el puerto 7070");
+        servidor.setRegistroEventos(bitacora);
+        System.out.println("Servidor Javalin iniciado en el puerto configurado (7070 por defecto)");
     }
 }
