@@ -49,30 +49,45 @@
   });
 </script>
 
-<div class="container mt-3">
-  <h4>Mapa Almacen</h4>
-  {#if resumen}
-    <p>Ocupadas: {resumen.espaciosOcupados} / Libres: {resumen.espaciosDisponibles} (Total: {resumen.capacidadTotal})</p>
-  {/if}
-  <div class="mb-2">
-    <span class="badge bg-success me-2">Ocupada</span>
-    <span class="badge bg-light text-dark border">Libre</span>
+<div class="card tarjeta-panel">
+  <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+    <span>Mapa del Almacen</span>
+    {#if resumen}
+      <span>
+        <span class="badge bg-success me-1">{resumen.espaciosOcupados} ocupadas</span>
+        <span class="badge bg-light text-dark">{resumen.espaciosDisponibles} libres / {resumen.capacidadTotal}</span>
+      </span>
+    {/if}
   </div>
-  {#each grupos as g}
-    <h6>Pasillo {g.pasillo}</h6>
-    {#each g.niveles as n}
-      <div class="d-flex flex-wrap mb-1">
-        <span class="me-2">N{n.nivel}:</span>
-        {#each n.celdas as c}
-          <div
-            title={c.ocupada ? c.lote : "Libre"}
-            class="border p-1 text-center me-1 mb-1 {c.ocupada ? 'bg-success text-white' : 'bg-light'}"
-            style="font-size: 0.7rem; min-width: 3rem;"
-          >
-            {c.ocupada ? c.lote : "Libre"}
+  <div class="card-body">
+    <div class="mb-2">
+      <span class="badge bg-success me-2">Ocupada (lote)</span>
+      <span class="badge bg-light text-dark border">Libre</span>
+    </div>
+    <div class="row g-3">
+      {#each grupos as g}
+        <div class="col-md-6 col-xl-3">
+          <div class="border rounded p-2 h-100">
+            <h6>Pasillo {g.pasillo}</h6>
+            {#each g.niveles as n}
+              <div class="d-flex flex-wrap align-items-center mb-1">
+                <small class="text-muted me-1">N{n.nivel}:</small>
+                {#each n.celdas as c}
+                  <div
+                    title={c.ocupada ? "Lote " + c.lote : "Libre"}
+                    class="celda-almacen border rounded text-center me-1 mb-1 p-1 {c.ocupada ? 'bg-success text-white' : 'bg-light text-muted'}"
+                  >
+                    {c.ocupada ? c.lote : "Libre"}
+                  </div>
+                {/each}
+              </div>
+            {/each}
           </div>
-        {/each}
-      </div>
-    {/each}
-  {/each}
+        </div>
+      {/each}
+    </div>
+    {#if grupos.length === 0}
+      <p class="text-muted mb-0">Cargando mapa del almacen...</p>
+    {/if}
+  </div>
 </div>

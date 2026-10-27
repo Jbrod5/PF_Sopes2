@@ -19,30 +19,29 @@
   let datosCola = null;
   let celdasAlmacen = [];
   let intervalo = null;
+  let enLinea = false;
 
   async function actualizarTablero() {
     try {
       const lista = await obtenerRecursos();
       datosRecursos = lista;
       recursos.set(lista);
+      enLinea = true;
     } catch (e) {
-      console.error("Error obteniendo recursos:", e);
+      enLinea = false;
     }
     try {
-      const metricas = await obtenerEstadisticas();
-      datosEstadisticas = metricas;
+      datosEstadisticas = await obtenerEstadisticas();
     } catch (e) {
       console.error("Error obteniendo estadisticas:", e);
     }
     try {
-      const activos = await obtenerProcesando();
-      datosProcesando = activos;
+      datosProcesando = await obtenerProcesando();
     } catch (e) {
       console.error("Error obteniendo procesando:", e);
     }
     try {
-      const espera = await obtenerCola();
-      datosCola = espera;
+      datosCola = await obtenerCola();
     } catch (e) {
       console.error("Error obteniendo cola:", e);
     }
@@ -83,42 +82,58 @@
   });
 </script>
 
-<div class="container-fluid">
-  <div class="row">
-    <div class="col-md-6">
+<nav class="navbar navbar-dark navbar-redxela mb-4">
+  <div class="container-fluid">
+    <span class="navbar-brand mb-0 h1">REDXela - Centro de Distribucion</span>
+    <span class="d-flex align-items-center gap-2">
+      {#if enLinea}
+        <span class="badge bg-success">En linea</span>
+      {:else}
+        <span class="badge bg-danger">Sin conexion</span>
+      {/if}
+    </span>
+  </div>
+</nav>
+
+<div class="container-fluid pb-4">
+  <div class="row g-3">
+    <div class="col-lg-6">
       <PanelRecursos datos={datosRecursos} />
     </div>
-    <div class="col-md-6">
-      <PanelPedidos />
-    </div>
-  </div>
-  <div class="row">
-    <div class="col-md-6">
-      <PanelDeadlock />
-    </div>
-    <div class="col-md-6">
-      <MapaAlmacen celdas={celdasAlmacen} />
-    </div>
-  </div>
-  <div class="row">
-    <div class="col-md-6">
-      <PanelEstadisticas datos={datosEstadisticas} />
-    </div>
-    <div class="col-md-6">
-      <PanelProcesando datos={datosProcesando} />
-    </div>
-  </div>
-  <div class="row">
-    <div class="col-md-6">
+    <div class="col-lg-6">
       <PanelCola datos={datosCola} />
     </div>
-    <div class="col-md-6">
-      <PanelMercaderia />
+  </div>
+  <div class="row g-3 mt-1">
+    <div class="col-lg-6">
+      <PanelProcesando datos={datosProcesando} />
+    </div>
+    <div class="col-lg-6">
+      <PanelEstadisticas datos={datosEstadisticas} />
     </div>
   </div>
-  <div class="row">
-    <div class="col-md-12">
+  <div class="row g-3 mt-1">
+    <div class="col-lg-6">
+      <PanelPedidos />
+    </div>
+    <div class="col-lg-6">
       <PanelClientes />
     </div>
   </div>
+  <div class="row g-3 mt-1">
+    <div class="col-lg-6">
+      <PanelMercaderia />
+    </div>
+    <div class="col-lg-6">
+      <PanelDeadlock />
+    </div>
+  </div>
+  <div class="row g-3 mt-1">
+    <div class="col-12">
+      <MapaAlmacen celdas={celdasAlmacen} />
+    </div>
+  </div>
+  <footer class="text-center text-muted mt-4">
+    <small>Sistema de simulacion REDXela - Sistemas Operativos 2</small>
+  </footer>
 </div>

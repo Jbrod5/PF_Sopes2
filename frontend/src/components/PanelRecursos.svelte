@@ -2,22 +2,49 @@
   export let datos = [];
 </script>
 
-<div class="container mt-3">
-  <h4>Estado de Recursos</h4>
-  <div class="row">
-    {#each datos as r}
-      <div class="col-md-4 mb-2">
-        <div class="card p-2">
-          <h6>{r.nombre}</h6>
-          <p>Disponibles: {r.disponibles} / {r.total}</p>
-          <p>En uso: {r.enUso}</p>
-          {#if r.tenedores && r.tenedores.length > 0}
-            <p>Retenido por: {r.tenedores.join(", ")}</p>
-          {:else}
-            <p>Retenido por: nadie</p>
-          {/if}
-        </div>
+<div class="card tarjeta-panel h-100">
+  <div class="card-header bg-primary text-white">Estado de Recursos</div>
+  <div class="card-body">
+    {#if datos.length === 0}
+      <p class="text-muted mb-0">Cargando recursos...</p>
+    {:else}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover tabla-compacta mb-0">
+          <thead>
+            <tr>
+              <th>Recurso</th>
+              <th class="text-center">Uso</th>
+              <th>Ocupacion</th>
+              <th>Retenido por</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each datos as r}
+              <tr>
+                <td><strong>{r.nombre}</strong><br /><small class="text-muted">{r.disponibles} de {r.total} libres</small></td>
+                <td class="text-center"><span class="badge bg-secondary">{r.enUso}/{r.total}</span></td>
+                <td style="min-width: 7rem;">
+                  <div class="progress barra-fina">
+                    <div
+                      class="progress-bar {r.enUso > 0 ? 'bg-warning' : 'bg-success'}"
+                      style="width: {r.total > 0 ? Math.round((r.enUso / r.total) * 100) : 0}%"
+                    ></div>
+                  </div>
+                </td>
+                <td>
+                  {#if r.tenedores && r.tenedores.length > 0}
+                    {#each r.tenedores as t}
+                      <span class="badge bg-dark me-1">{t}</span>
+                    {/each}
+                  {:else}
+                    <span class="text-muted">Libre</span>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
       </div>
-    {/each}
+    {/if}
   </div>
 </div>
