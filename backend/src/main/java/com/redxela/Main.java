@@ -299,10 +299,13 @@ public class Main {
     private static void iniciarServidor(ColaPrioridadPedidos cola, GestorRecursos gestor, MotorPlanificador motor, List<Producto> productos, RegistroClientes registro, AlmacenPaginado almacenServidor, ControladorInventario inventarioVivo, RegistroEventos bitacora) {
         ControladorServidor servidor = new ControladorServidor(cola, gestor, almacenServidor, motor);
         BufferRecepcion bufferVivo = new BufferRecepcion(10);
-        ServicioRecepcion recepcionViva = new ServicioRecepcion(bufferVivo, productos);
+        ServicioRecepcion recepcionViva = new ServicioRecepcion(bufferVivo, productos, 2500L);
         ServicioInventario inventarioServicio = new ServicioInventario(bufferVivo, inventarioVivo, 300L);
         Thread hiloInventario = new Thread(inventarioServicio, "Hilo-Inventario-Vivo");
         hiloInventario.start();
+        // iniciar llegada continua de camiones para alimentar stock en vivo
+        Thread hiloRecepcion = new Thread(recepcionViva, "Hilo-Recepcion-Viva");
+        hiloRecepcion.start();
         servidor.setServicioRecepcion(recepcionViva);
         servidor.setRegistroClientes(registro);
         servidor.setRegistroEventos(bitacora);

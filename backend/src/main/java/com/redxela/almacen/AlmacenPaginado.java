@@ -103,33 +103,35 @@ public class AlmacenPaginado {
 
             int asignados = 0;
 
-            // buscar celdas libres dispersas en cualquier pasillo nivel y espacio
+            // recolectar todas las celdas libres del almacen
+            List<UbicacionAlmacen> libres = new ArrayList<UbicacionAlmacen>();
             for (int p = 0; p < this.totalPasillos; p++) {
                 for (int n = 0; n < this.totalNiveles; n++) {
                     for (int e = 0; e < this.totalEspaciosPorNivel; e++) {
                         UbicacionAlmacen celdaActual = this.celdas[p][n][e];
                         if (!celdaActual.isOcupada()) {
-                            // ocupar la celda con el lote y producto
-                            celdaActual.asignarLote(lote.getIdLote(), lote.getProducto().getId());
-
-                            // registrar la entrada en la tabla de paginacion
-                            tabla.agregarEntrada(celdaActual);
-
-                            asignados = asignados + 1;
-
-                            // si completamos la cantidad requerida finalizar la busqueda
-                            if (asignados == cantidadRequerida) {
-                                break;
-                            }
+                            libres.add(celdaActual);
                         }
                     }
-                    if (asignados == cantidadRequerida) {
-                        break;
-                    }
                 }
+            }
+
+            // mezclar las libres para repartir el lote en pasillos y niveles distintos
+            java.util.Collections.shuffle(libres);
+
+            // ocupar las primeras celdas de la lista mezclada
+            for (int i = 0; i < libres.size(); i++) {
                 if (asignados == cantidadRequerida) {
                     break;
                 }
+                UbicacionAlmacen celdaActual = libres.get(i);
+                // ocupar la celda con el lote y producto
+                celdaActual.asignarLote(lote.getIdLote(), lote.getProducto().getId());
+
+                // registrar la entrada en la tabla de paginacion
+                tabla.agregarEntrada(celdaActual);
+
+                asignados = asignados + 1;
             }
 
             // guardar la tabla de paginacion en el registro central
