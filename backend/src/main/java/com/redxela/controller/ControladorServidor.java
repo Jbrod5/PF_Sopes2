@@ -96,21 +96,36 @@ public class ControladorServidor implements OyenteSimulacion {
             motor.setOyente(this);
         }
         // crear la instancia de javalin en el puerto 7070
-        String rutaEstatica = resolverRutaEstatica();
-        boolean hayFrontend = false;
-        if (rutaEstatica != null) {
-            hayFrontend = true;
+        java.net.URL recursoEmpaquetado = ControladorServidor.class.getResource("/public/index.html");
+        boolean enJar = false;
+        if (recursoEmpaquetado != null) {
+            enJar = true;
         }
-        final boolean servirFrontend = hayFrontend;
-        final String rutaFinal = rutaEstatica;
+        // buscar carpeta externa solo cuando no hay frontend empaquetado
+        String rutaExterna = null;
+        if (!enJar) {
+            rutaExterna = resolverRutaEstatica();
+        }
+        boolean servirFrontend = false;
+        if (enJar) {
+            servirFrontend = true;
+        } else if (rutaExterna != null) {
+            servirFrontend = true;
+        }
+        final boolean empaquetadoFinal = enJar;
+        final boolean servirFinal = servirFrontend;
+        final String rutaFinal = rutaExterna;
         this.app = Javalin.create(config -> {
-            // configurar archivos estaticos solo si la carpeta compilada existe
-            if (servirFrontend) {
+            // servir frontend empaquetado en el jar o carpeta externa en desarrollo
+            if (empaquetadoFinal) {
+                config.staticFiles.add("/public", Location.CLASSPATH);
+                config.spaRoot.addFile("/", "/public/index.html", Location.CLASSPATH);
+            } else if (servirFinal) {
                 config.staticFiles.add(rutaFinal, Location.EXTERNAL);
                 config.spaRoot.addFile("/", rutaFinal + "/index.html", Location.EXTERNAL);
             }
         }).start(7070);
-        if (!servirFrontend) {
+        if (!servirFinal) {
             System.err.println("[SERVIDOR] Advertencia: no se encontro frontend/dist, solo se servira la API REST");
         }
         // configurar rutas disponibles del servidor
